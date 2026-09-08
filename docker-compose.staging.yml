@@ -1,0 +1,10 @@
+services:
+  app:
+    image: ${IMAGE_REF:-ghcr.io/debarpan-bose-chowdhury/swing-trading-system:latest}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://localhost:8080/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
