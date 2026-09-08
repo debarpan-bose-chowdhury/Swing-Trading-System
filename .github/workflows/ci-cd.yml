@@ -19,6 +19,7 @@ jobs:
     with:
       language: python
       python-version: "3.12"
+      python-install-command: pip install .
       python-test-command: python -m unittest discover -s tests -v
 
   build-docker:

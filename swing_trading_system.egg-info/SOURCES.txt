@@ -1,0 +1,10 @@
+LICENSE
+README.md
+pyproject.toml
+app/__init__.py
+app/__main__.py
+swing_trading_system.egg-info/PKG-INFO
+swing_trading_system.egg-info/SOURCES.txt
+swing_trading_system.egg-info/dependency_links.txt
+swing_trading_system.egg-info/top_level.txt
+tests/test_health.py
