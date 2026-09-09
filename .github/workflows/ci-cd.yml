@@ -71,6 +71,10 @@ jobs:
   deploy-production:
     needs: [build-docker, dast-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      deployments: write
+      packages: read
+      contents: read
     uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-production.yml@da8f68e4f868c85ea540e36a60004d800176c778
     with:
       image-ref: ${{ needs.build-docker.outputs.image-ref }}
