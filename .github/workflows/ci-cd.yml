@@ -28,8 +28,17 @@ jobs:
       - shell: bash
         run: python -m unittest discover -s tests -v
 
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938
+        with:
+          languages: python
+      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938
+
   build-docker:
-    needs: ci
+    needs: [ci, codeql]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/docker-build-push.yml@main
     with:
