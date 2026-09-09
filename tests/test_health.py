@@ -21,7 +21,7 @@ class HealthEndpointTests(unittest.TestCase):
         self.server.server_close()
 
     def test_health_endpoint_returns_ok(self) -> None:
-        with urlopen(f"{self.url}/health") as response:
+        with urlopen(f"{self.url}/health", timeout=2) as response:
             self.assertEqual(response.status, 200)
             self.assertEqual(json.load(response), {"status": "ok"})
 
