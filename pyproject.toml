@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swing-trading-system"
+version = "0.1.0"
+description = "Swing trading system service"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+addopts = "--cov=app --cov-branch --cov-report=term-missing"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["tests/*"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["build*", "*.egg-info*"]

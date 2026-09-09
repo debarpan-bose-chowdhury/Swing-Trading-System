@@ -1,0 +1,83 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - shell: bash
+        run: |
+          python -m pip install --upgrade pip==25.2
+          python -m pip install --only-binary :all: --no-deps .
+      - shell: bash
+        run: python -m unittest discover -s tests -v
+
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938
+        with:
+          languages: python
+      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938
+
+  build-docker:
+    needs: [ci, codeql]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/docker-build-push.yml@da8f68e4f868c85ea540e36a60004d800176c778
+    with:
+      language: python
+      image-name: swing-trading-system
+      image-tag: ${{ github.sha }}
+      dockerfile-path: Dockerfile
+
+  deploy-staging:
+    needs: build-docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      deployments: write 
+      packages: read
+      contents: read
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-staging.yml@da8f68e4f868c85ea540e36a60004d800176c778
+    with:
+      image-ref: ${{ needs.build-docker.outputs.image-ref }}
+      compose-file: docker-compose.staging.yml
+      compose-service: app
+      health-check-url: https://localhost:8080/health
+
+  dast-scan:
+    needs: deploy-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      security-events: write
+      contents: read
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/dast-smoke.yml@da8f68e4f868c85ea540e36a60004d800176c778
+    with:
+      target-url: https://localhost:8080
+      smoke-endpoints: /health
+
+  deploy-production:
+    needs: [build-docker, dast-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      deployments: write
+      packages: read
+      contents: read
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-production.yml@da8f68e4f868c85ea540e36a60004d800176c778
+    with:
+      image-ref: ${{ needs.build-docker.outputs.image-ref }}
+      compose-file: docker-compose.yml
+      compose-service: app
+      health-check-url: https://localhost:8080/health
