@@ -1,1 +1,0 @@
-"""Swing trading system application."""

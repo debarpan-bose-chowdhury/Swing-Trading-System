@@ -1,7 +1,0 @@
-Metadata-Version: 2.4
-Name: swing-trading-system
-Version: 0.1.0
-Summary: Swing trading system service
-Requires-Python: >=3.12
-License-File: LICENSE
-Dynamic: license-file
