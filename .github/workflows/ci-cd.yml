@@ -60,6 +60,8 @@ jobs:
   dast-scan:
     needs: deploy-staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      security-events: write
     uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/dast-smoke.yml@da8f68e4f868c85ea540e36a60004d800176c778
     with:
       target-url: https://localhost:8080
