@@ -15,15 +15,30 @@ permissions:
 
 jobs:
   ci:
-    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/ci.yml@main
-    with:
-      language: python
-      python-version: "3.12"
-      python-install-command: pip install .
-      python-test-command: python -m unittest discover -s tests -v
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+      - shell: bash
+        run: python -m unittest discover -s tests -v
+
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938
+        with:
+          languages: python
+      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938
 
   build-docker:
-    needs: ci
+    needs: [ci, codeql]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/docker-build-push.yml@main
     with:
