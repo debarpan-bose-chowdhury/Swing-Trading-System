@@ -4,3 +4,6 @@ __pycache__
 *.py[cod]
 .venv
 tests
+build
+dist
+*.egg-info
