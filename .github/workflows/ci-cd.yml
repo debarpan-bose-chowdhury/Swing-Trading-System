@@ -48,6 +48,9 @@ jobs:
       image-name: swing-trading-system
       image-tag: ${{ github.sha }}
       dockerfile-path: Dockerfile
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
   deploy-staging:
     needs: build-docker
