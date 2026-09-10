@@ -60,7 +60,7 @@ jobs:
           echo "Generated image-name: $image_name"
       - name: Verify image_ref output
         if: ${{ steps.meta.outputs.image_ref != '' }}
-        run: echo "steps.meta.outputs.image_ref is populated"
+        run: echo "steps.meta.outputs.image_ref is populated with value ${{steps.meta.outputs.image_ref}}"
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
