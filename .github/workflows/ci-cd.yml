@@ -58,6 +58,9 @@ jobs:
           echo "image-name=$image_name" >> "$GITHUB_OUTPUT"
           echo "Generated image_ref: $image_ref"
           echo "Generated image-name: $image_name"
+      - name: Verify image_ref output
+        if: ${{ steps.meta.outputs.image_ref != '' }}
+        run: echo "steps.meta.outputs.image_ref is populated"
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
