@@ -53,8 +53,11 @@ jobs:
         run: |
           set -euo pipefail
           image_name='swing-trading-system'
-          echo "image_ref=ghcr.io/${{ github.repository_owner }}/$image_name:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          image_ref="ghcr.io/${{ github.repository_owner }}/$image_name:${{ github.sha }}"
+          echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
           echo "image-name=$image_name" >> "$GITHUB_OUTPUT"
+          echo "Generated image_ref: $image_ref"
+          echo "Generated image-name: $image_name"
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
@@ -76,7 +79,15 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
-
+  debug-image:
+      needs: build-docker
+      if: always()
+      runs-on: ubuntu-latest
+      steps:
+        - name: Debug build output
+          run: |
+            echo "build-docker result: ${{ needs.build-docker.result }}"
+            echo "image_ref: '${{ needs.build-docker.outputs.image_ref }}'"
   deploy-staging:
     needs: build-docker
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
