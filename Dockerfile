@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
 FROM python:3.12-slim
 
+LABEL org.opencontainers.image.source="https://github.com/debarpan-bose-chowdhury/Swing-Trading-System"
+
 WORKDIR /app
 
 RUN addgroup --system --gid 10001 appgroup \
