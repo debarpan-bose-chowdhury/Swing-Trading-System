@@ -39,6 +39,9 @@ jobs:
   build-docker:
     needs: [ci, codeql]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
     uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/docker-build-push.yml@da8f68e4f868c85ea540e36a60004d800176c778
     with:
       language: python
