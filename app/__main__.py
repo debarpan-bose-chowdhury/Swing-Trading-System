@@ -32,8 +32,6 @@ def main() -> None:
     server = ThreadingHTTPServer(("0.0.0.0", port), ApplicationHandler)
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
-    context.options |= ssl.OP_NO_TLSv1
-    context.options |= ssl.OP_NO_TLSv1_1
     context.load_cert_chain(certfile=certfile, keyfile=keyfile)
     server.socket = context.wrap_socket(server.socket, server_side=True)
     server.serve_forever()

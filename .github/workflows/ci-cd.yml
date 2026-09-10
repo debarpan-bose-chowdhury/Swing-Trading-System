@@ -112,6 +112,8 @@ jobs:
             -days 1 \
             -subj '/CN=localhost' \
             -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1'
+          # container runs as non-root appuser (uid 10001); make key readable via the read-only bind mount
+          chmod 644 certs/key.pem certs/cert.pem
       - name: Pull latest image
         shell: bash
         run: |
@@ -190,6 +192,8 @@ jobs:
             -days 1 \
             -subj '/CN=localhost' \
             -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1'
+          # container runs as non-root appuser (uid 10001); make key readable via the read-only bind mount
+          chmod 644 certs/key.pem certs/cert.pem
       - name: Pull latest image
         shell: bash
         run: |
