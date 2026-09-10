@@ -76,11 +76,11 @@ jobs:
           push: true
           tags: |
             ${{ steps.meta.outputs.image_ref }}
-            ghcr.io/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:latest
+            ghcr.io/debarpan-bose-chowdhury/${{ steps.meta.outputs.image-name }}:latest
           provenance: true
           sbom: true
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ steps.meta.outputs.image-name }}:buildcache,mode=max
+          cache-from: type=registry,ref=ghcr.io/debarpan-bose-chowdhury/${{ steps.meta.outputs.image-name }}:buildcache
+          cache-to: type=registry,ref=ghcr.io/debarpan-bose-chowdhury/${{ steps.meta.outputs.image-name }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
   debug-image:
       needs: build-docker
