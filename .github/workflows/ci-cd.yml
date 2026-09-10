@@ -44,7 +44,6 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image-ref: ${{ steps.meta.outputs.image_ref }}
       image-digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -90,7 +89,7 @@ jobs:
         - name: Debug build output
           run: |
             echo "build-docker result: ${{ needs.build-docker.result }}"
-            echo "image_ref: ${{ needs.build-docker.outputs.image-ref }}"
+            echo "image_ref: ghcr.io/debarpan-bose-chowdhury/swing-trading-system:${{ github.sha }}"
             echo "digest: ${{ needs.build-docker.outputs.image-digest }}"
   deploy-staging:
     needs: build-docker
@@ -101,7 +100,7 @@ jobs:
       packages: read
       contents: read
     env:
-      IMAGE_REF: ${{ needs['build-docker'].outputs.image_ref }}
+      IMAGE_REF: ghcr.io/debarpan-bose-chowdhury/swing-trading-system:${{ github.sha }}
       COMPOSE_FILE: docker-compose.staging.yml
       COMPOSE_SERVICE: app
       HEALTH_CHECK_URL: https://localhost:8080/health
@@ -179,7 +178,7 @@ jobs:
       packages: read
       contents: read
     env:
-      IMAGE_REF: ${{ needs['build-docker'].outputs.image_ref }}
+      IMAGE_REF: ghcr.io/debarpan-bose-chowdhury/swing-trading-system:${{ github.sha }}
       COMPOSE_FILE: docker-compose.yml
       COMPOSE_SERVICE: app
       HEALTH_CHECK_URL: https://localhost:8080/health
