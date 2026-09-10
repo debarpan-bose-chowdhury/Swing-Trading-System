@@ -80,16 +80,69 @@ jobs:
   deploy-staging:
     needs: build-docker
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     permissions:
-      deployments: write 
-      packages: write
+      deployments: write
+      packages: read
       contents: read
-    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-staging.yml@da8f68e4f868c85ea540e36a60004d800176c778
-    with:
-      image-ref: ${{ needs.build-docker.outputs.image-ref }}
-      compose-file: docker-compose.staging.yml
-      compose-service: app
-      health-check-url: https://localhost:8080/health
+    env:
+      IMAGE_REF: ${{ needs.build-docker.outputs.image-ref }}
+      COMPOSE_FILE: docker-compose.staging.yml
+      COMPOSE_SERVICE: app
+      HEALTH_CHECK_URL: https://localhost:8080/health
+      HEALTH_CHECK_MAX_RETRIES: "30"
+      HEALTH_CHECK_DELAY: "10"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Login to GHCR
+        if: ${{ startsWith(env.IMAGE_REF, 'ghcr.io/') }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Create local TLS certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p certs
+          openssl req -x509 -nodes -newkey rsa:2048 \
+            -keyout certs/key.pem \
+            -out certs/cert.pem \
+            -days 1 \
+            -subj '/CN=localhost' \
+            -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1'
+      - name: Pull latest image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE_REF"
+      - name: Deploy via Docker Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          export IMAGE_REF
+          docker compose -f "$COMPOSE_FILE" down || true
+          docker compose -f "$COMPOSE_FILE" up -d "$COMPOSE_SERVICE"
+      - name: Wait for health check
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 "$HEALTH_CHECK_MAX_RETRIES"); do
+            echo "[${i}/${HEALTH_CHECK_MAX_RETRIES}] Checking health: ${HEALTH_CHECK_URL}"
+            if curl -ksf "$HEALTH_CHECK_URL" >/dev/null 2>&1; then
+              echo "✓ Health check passed"
+              exit 0
+            fi
+            if [ "$i" -lt "$HEALTH_CHECK_MAX_RETRIES" ]; then
+              echo "  Waiting ${HEALTH_CHECK_DELAY}s before retry..."
+              sleep "$HEALTH_CHECK_DELAY"
+            fi
+          done
+
+          echo "✗ Health check failed after $HEALTH_CHECK_MAX_RETRIES attempts" >&2
+          docker compose -f "$COMPOSE_FILE" logs
+          exit 1
 
   dast-scan:
     needs: deploy-staging
@@ -105,13 +158,66 @@ jobs:
   deploy-production:
     needs: [build-docker, dast-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     permissions:
       deployments: write
       packages: read
       contents: read
-    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-production.yml@da8f68e4f868c85ea540e36a60004d800176c778
-    with:
-      image-ref: ${{ needs.build-docker.outputs.image-ref }}
-      compose-file: docker-compose.yml
-      compose-service: app
-      health-check-url: https://localhost:8080/health
+    env:
+      IMAGE_REF: ${{ needs.build-docker.outputs.image-ref }}
+      COMPOSE_FILE: docker-compose.yml
+      COMPOSE_SERVICE: app
+      HEALTH_CHECK_URL: https://localhost:8080/health
+      HEALTH_CHECK_MAX_RETRIES: "30"
+      HEALTH_CHECK_DELAY: "10"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Login to GHCR
+        if: ${{ startsWith(env.IMAGE_REF, 'ghcr.io/') }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Create local TLS certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p certs
+          openssl req -x509 -nodes -newkey rsa:2048 \
+            -keyout certs/key.pem \
+            -out certs/cert.pem \
+            -days 1 \
+            -subj '/CN=localhost' \
+            -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1'
+      - name: Pull latest image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE_REF"
+      - name: Deploy via Docker Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          export IMAGE_REF
+          docker compose -f "$COMPOSE_FILE" down || true
+          docker compose -f "$COMPOSE_FILE" up -d "$COMPOSE_SERVICE"
+      - name: Wait for health check
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 "$HEALTH_CHECK_MAX_RETRIES"); do
+            echo "[${i}/${HEALTH_CHECK_MAX_RETRIES}] Checking health: ${HEALTH_CHECK_URL}"
+            if curl -ksf "$HEALTH_CHECK_URL" >/dev/null 2>&1; then
+              echo "✓ Health check passed"
+              exit 0
+            fi
+            if [ "$i" -lt "$HEALTH_CHECK_MAX_RETRIES" ]; then
+              echo "  Waiting ${HEALTH_CHECK_DELAY}s before retry..."
+              sleep "$HEALTH_CHECK_DELAY"
+            fi
+          done
+
+          echo "✗ Health check failed after $HEALTH_CHECK_MAX_RETRIES attempts" >&2
+          docker compose -f "$COMPOSE_FILE" logs
+          exit 1
