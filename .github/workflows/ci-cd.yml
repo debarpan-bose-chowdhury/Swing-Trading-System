@@ -88,7 +88,7 @@ jobs:
           run: |
             echo "build-docker result: ${{ needs.build-docker.result }}"
             echo "image_ref: '${{ needs.build-docker.outputs.image_ref }}'"
-            echo "${{needs.build-docker.outputs}}"
+            echo "digest: ${{ needs.build-docker.outputs.image-digest }}"
   deploy-staging:
     needs: build-docker
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
