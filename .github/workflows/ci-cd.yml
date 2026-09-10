@@ -87,7 +87,7 @@ jobs:
         - name: Debug build output
           run: |
             echo "build-docker result: ${{ needs.build-docker.result }}"
-            echo "image_ref: '${{ needs.build-docker.outputs.image-ref }}'"
+            echo "image_ref: ${{ needs.build-docker.outputs.image-ref }}"
             echo "digest: ${{ needs.build-docker.outputs.image-digest }}"
   deploy-staging:
     needs: build-docker
