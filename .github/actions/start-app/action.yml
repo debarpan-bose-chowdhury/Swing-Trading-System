@@ -24,9 +24,9 @@ runs:
             set -euo pipefail
             mkdir -p certs
             openssl req -x509 -nodes -days 1 -newkey rsa:2048 -keyout certs/key.pem -out certs/cert.pem -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
-            sudo chown 10001:10001 certs/key.pem certs/cert.pem
             chmod 600 certs/key.pem
             chmod 644 certs/cert.pem
+            sudo chown 10001:10001 certs/key.pem certs/cert.pem
         
         - name: Start stack
           shell: bash
