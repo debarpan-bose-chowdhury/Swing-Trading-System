@@ -345,9 +345,12 @@ class TickerMetadataNotifier:
     def check_health(
         self, date_str: str | None = None, cap_prefixes: list[str] | None = None
     ) -> dict[str, Any]:
-        """Verify existence of cap files for date_str (or latest) and return health status."""
+        """Verify existence of cap files for date_str (or today) and return health status."""
         if not cap_prefixes:
             cap_prefixes = list(DEFAULT_CAP_LIMITS.keys())
+
+        if not date_str:
+            date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
         if not self.data_dir.exists():
             return {
@@ -360,23 +363,12 @@ class TickerMetadataNotifier:
         missing_files: list[str] = []
 
         for cap_prefix in cap_prefixes:
-            if date_str:
-                expected_filename = f"{cap_prefix}_{date_str}.csv"
-                file_path = self.data_dir / expected_filename
-                if file_path.exists() and file_path.stat().st_size > 0:
-                    existing_files.append(expected_filename)
-                else:
-                    missing_files.append(expected_filename)
+            expected_filename = f"{cap_prefix}_{date_str}.csv"
+            file_path = self.data_dir / expected_filename
+            if file_path.exists() and file_path.stat().st_size > 0:
+                existing_files.append(expected_filename)
             else:
-                matches = [
-                    p.name
-                    for p in self.data_dir.glob(f"{cap_prefix}_*.csv")
-                    if p.stat().st_size > 0
-                ]
-                if matches:
-                    existing_files.extend(matches)
-                else:
-                    missing_files.append(f"{cap_prefix}_*.csv")
+                missing_files.append(expected_filename)
 
         is_healthy = len(missing_files) == 0
 
