@@ -179,7 +179,6 @@ class TickerMetadataFetcher:
                         break
                     except ValueError:
                         continue
-                        continue
 
             if mcap_val is not None:
                 market_caps[symbol] = mcap_val
