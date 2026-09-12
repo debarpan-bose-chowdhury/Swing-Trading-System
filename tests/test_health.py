@@ -1,6 +1,7 @@
 import json
 import os
 import runpy
+import sys
 import threading
 import unittest
 from pathlib import Path
@@ -8,6 +9,8 @@ from http.server import ThreadingHTTPServer
 from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 from urllib.request import urlopen
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import app.__main__ as app_main
 from app.__main__ import ApplicationHandler
