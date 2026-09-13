@@ -358,15 +358,15 @@ class TestTickerMetadataNotifier(unittest.TestCase):
         self.assertTrue(res_healthy["healthy"])
         self.assertEqual(len(res_healthy["existing_files"]), 3)
 
-        # Test without date_str when files exist
-        res_no_date = notifier.check_health()
+        # Test with explicit date_str when files exist
+        res_no_date = notifier.check_health("2026-09-12")
         self.assertTrue(res_no_date["healthy"])
 
-        # Test without date_str when files missing for some caps
+        # Test with explicit date_str when files missing for some caps
         tmp_dir_partial = Path(tempfile.mkdtemp())
         (tmp_dir_partial / "LargeCap_2026-09-12.csv").write_text("Ticker,Name\nT1,C1\n")
         notifier_partial = TickerMetadataNotifier(data_dir=tmp_dir_partial)
-        res_partial = notifier_partial.check_health()
+        res_partial = notifier_partial.check_health("2026-09-12")
         self.assertFalse(res_partial["healthy"])
 
 

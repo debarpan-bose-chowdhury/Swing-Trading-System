@@ -12,12 +12,12 @@ The service listens on port `8080` by default and requires both
 start the service:
 
 ```bash
-set TLS_CERTFILE=certs/cert.pem
-set TLS_KEYFILE=certs/key.pem
+export TLS_CERTFILE=certs/cert.pem
+export TLS_KEYFILE=certs/key.pem
 python -m app
 ```
 
-On PowerShell, use `$env:TLS_CERTFILE` and `$env:TLS_KEYFILE` instead of `set`.
+On PowerShell, use `$env:TLS_CERTFILE` and `$env:TLS_KEYFILE`. On Windows CMD, use `set TLS_CERTFILE=certs\cert.pem`.
 The port can be changed with `PORT`.
 
 Check the health endpoint over HTTPS:
