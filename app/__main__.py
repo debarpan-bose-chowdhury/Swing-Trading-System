@@ -7,14 +7,30 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
 
+SECURITY_HEADERS = {
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-store",
+}
+
+
 class ApplicationHandler(BaseHTTPRequestHandler):
+    def version_string(self) -> str:
+        return "app"  # do not leak server/Python versions
+
+    def end_headers(self) -> None:
+        for name, value in SECURITY_HEADERS.items():  # applies to every response, incl. errors
+            self.send_header(name, value)
+        super().end_headers()
+
     def do_GET(self) -> None:
         if urlparse(self.path).path == "/health":
             body = json.dumps({"status": "ok"}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
-            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
             self.end_headers()
             self.wfile.write(body)
             return

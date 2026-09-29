@@ -39,6 +39,16 @@ class HealthEndpointTests(unittest.TestCase):
             urlopen(f"{self.url}/unknown")
 
         self.assertEqual(error.exception.code, 404)
+        self.assert_security_headers(error.exception.headers)
+
+    def assert_security_headers(self, headers) -> None:
+        for name, value in app_main.SECURITY_HEADERS.items():
+            self.assertEqual(headers.get(name), value, name)
+        self.assertEqual(headers.get("Server"), "app")
+
+    def test_health_response_has_security_headers(self) -> None:
+        with urlopen(f"{self.url}/health", timeout=2) as response:
+            self.assert_security_headers(response.headers)
 
     def test_main_requires_tls_cert_and_key(self) -> None:
         with patch.dict(os.environ, {"PORT": "9000", "TLS_CERTFILE": "cert.pem"}, clear=True):
