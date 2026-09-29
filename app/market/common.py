@@ -21,12 +21,24 @@ class Busy(Exception):
     """Another stage holds the run lock."""
 
 
+def safe_path(path: str | Path) -> Path:
+    """Resolve path and require it to stay inside the working directory (/app in the container)."""
+    base = os.path.realpath(os.getcwd())
+    full = os.path.realpath(os.path.join(base, path))
+    if os.path.commonpath([full, base]) != base:
+        raise ValueError(f"path escapes the working directory: {path}")
+    return Path(full)
+
+
 def load_config() -> dict:
-    return json.loads(Path(CONFIG_PATH).read_text(encoding="utf-8"))
+    cfg = json.loads(safe_path(CONFIG_PATH).read_text(encoding="utf-8"))
+    cfg["paths"] = {k: str(safe_path(v)) for k, v in cfg["paths"].items()}
+    return cfg
 
 
 def atomic(path: Path, write) -> None:
     """Write via write(tmp_path), then atomically rename over path."""
+    path = safe_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     write(tmp)
@@ -47,10 +59,10 @@ def shift(day: str, days: int) -> str:
 
 @contextmanager
 def run_lock(cfg: dict, log: logging.Logger):
-    path = Path(cfg["paths"]["market"]) / ".lock"
+    path = safe_path(Path(cfg["paths"]["market"]) / ".lock")
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and time.time() - path.stat().st_mtime > cfg["lock"]["staleAfterHours"] * 3600:
-        log.warning("Taking over stale lock %s", path)
+        log.warning("Taking over a stale run lock")
         path.unlink(missing_ok=True)
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)

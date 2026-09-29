@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import tempfile
 import unittest
 from datetime import date, datetime, timedelta
@@ -62,9 +63,8 @@ class Yahoo:
 def make_cfg(root: Path) -> dict:
     return {
         "paths": {
-            "market": str(root / "market"), "upstreamStorage": str(root / "storage"),
-            "upstreamHealth": str(root / "health.json"), "logs": str(root / "logs"),
-            "calendar": str(root / "cal.json"), "indices": str(root / "indices.json"),
+            "market": "market", "upstreamStorage": "storage", "upstreamHealth": "health.json",
+            "logs": "logs", "calendar": "cal.json", "indices": "indices.json",
         },
         "fetch": {"batchSize": 2, "batchGapSeconds": 0, "hourlyRequestBudget": 2000, "blockPauseMinutes": 60,
                   "maxBlockPausesPerRun": 3, "maxRetries": 3, "backoffSeconds": [2, 4, 8], "nullRefetchPasses": 2,
@@ -83,7 +83,10 @@ class Env(unittest.TestCase):
     def setUp(self) -> None:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.root = Path(tmp.name)
+        self.root = Path(tmp.name).resolve()
+        previous = os.getcwd()
+        os.chdir(self.root)  # config paths are relative to the working directory, like /app in the container
+        self.addCleanup(os.chdir, previous)
         self.cfg = make_cfg(self.root)
         self.market = Path(self.cfg["paths"]["market"])
         self.set_calendar()

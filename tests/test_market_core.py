@@ -156,6 +156,27 @@ class CommonTests(Env):
         with self.assertRaises(Busy), common.run_lock(self.cfg, LOG):
             pass
 
+    def test_safe_path_keeps_paths_inside_the_working_directory(self):
+        self.assertEqual(common.safe_path("a/b.csv"), self.root / "a" / "b.csv")
+        self.assertEqual(common.safe_path(self.root / "x"), self.root / "x")
+        for bad in ("../outside", "/etc/passwd", "a/../../outside"):
+            with self.assertRaises(ValueError):
+                common.safe_path(bad)
+
+    def test_atomic_and_lock_refuse_paths_outside(self):
+        with self.assertRaises(ValueError):
+            common.write_csv(pd.DataFrame({"a": [1]}), Path("../escape.csv"))
+        self.cfg["paths"]["market"] = "../escape"
+        with self.assertRaises(ValueError), common.run_lock(self.cfg, LOG):
+            pass
+
+    def test_load_config_rejects_escaping_paths(self):
+        cfg_file = self.root / "market.json"
+        self.cfg["paths"]["logs"] = "/tmp/elsewhere"
+        cfg_file.write_text(json.dumps(self.cfg))
+        with patch("app.market.common.CONFIG_PATH", str(cfg_file)), self.assertRaises(ValueError):
+            common.load_config()
+
     def test_atomic_leaves_no_temp_file(self):
         target = self.root / "x" / "f.csv"
         common.write_csv(pd.DataFrame({"a": [1]}), target)
