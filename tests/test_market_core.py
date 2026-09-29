@@ -250,6 +250,7 @@ class MailerTests(Env):
             self.assertTrue(mailer.send(self.cfg, "subj", "body", LOG))
         server = smtp.return_value.__enter__.return_value
         server.starttls.assert_called_once()
+        self.assertTrue(server.starttls.call_args.kwargs["context"].check_hostname)  # certificate is verified
         server.login.assert_called_once_with("u", "p")
         self.assertEqual(server.send_message.call_args.args[0]["Subject"], "subj")
 

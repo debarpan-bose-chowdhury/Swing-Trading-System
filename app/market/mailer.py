@@ -3,6 +3,7 @@
 import logging
 import os
 import smtplib
+import ssl
 from email.message import EmailMessage
 
 
@@ -18,7 +19,7 @@ def send(cfg: dict, subject: str, body: str, log: logging.Logger) -> bool:
     msg.set_content(body)
     try:
         with smtplib.SMTP(mail["smtpHost"], mail["smtpPort"], timeout=30) as smtp:
-            smtp.starttls()
+            smtp.starttls(context=ssl.create_default_context())
             if os.environ.get("SMTP_USER"):
                 smtp.login(os.environ["SMTP_USER"], os.environ.get("SMTP_PASSWORD", ""))
             smtp.send_message(msg)
