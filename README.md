@@ -1,7 +1,7 @@
 # Swing-Trading-System
 
 A Python 3.12+ service for the swing-trading system. The current implementation
-provides an HTTPS health endpoint and an NSE ticker-metadata pipeline.
+provides an HTTPS health endpoint, an NSE ticker-metadata pipeline and the Ticker Data System (OHLCV price history).
 
 ## Development
 
@@ -55,7 +55,8 @@ schedule). Buckets are evaluated highest threshold first regardless of list orde
 allowed. Set `CONFIG_PATH` to use a different file. The thresholds shipped are the TDD placeholders
 (2T / 500B / 100B INR, N = 50) and still need to be tuned.
 
-Run the tests (unit tests cover every stage; the NSE endpoints are never contacted):
+Run the tests (unit tests cover every stage; the NSE and Yahoo endpoints are never contacted; needs the dependencies from
+`pyproject.toml`, e.g. `pip install -e . pytest pytest-cov`):
 
 ```bash
 python -m unittest discover -s tests -v   # or: pytest
@@ -77,9 +78,80 @@ docker run --rm `
 Stagger the daily tasks a few minutes apart from 19:30 (after NSE close) so they never overlap; the design relies on
 that instead of file locks. The bind-mount path `C:\ProgramData\ticker-pipeline` is a default to confirm.
 
+### Ticker Data System (price history)
+
+Maintains daily OHLCV history for every ticker the metadata pipeline has ever selected, plus the indices in
+`app/config/indices.json` (`^NSEI`, `^NSEBANK`, `^BSESN`). Design: *Ticker Data System - TDD*. Data comes from `yfinance`
+(raw prices, `auto_adjust=False`, plus `AdjClose`), is validated row by row, and is stored per ticker in two tiers:
+recent rows as CSV, rows older than 365 days as Parquet + zstd.
+
+| Stage | Command | When | What it does |
+|---|---|---|---|
+| Migrator | `python -m app.market.migrator` | Manual, once | Needs today's healthy `health.json`. Seeds `registry.csv` from the upstream bucket files, downloads max history (50 tickers per batch, indices one at a time), splits at the cutoff. Resumable through `migration_checkpoint.json`; writes `migration.done` when every ticker and index is settled. |
+| Updator | `python -m app.market.updator` | Daily 21:00 IST | Refreshes the registry (only if upstream is healthy *today*), backfills new tickers, gap-fills new trading days plus a 30-day lookback, rebuilds a ticker's full history on a split/dividend or when Yahoo restates stored prices, sets a ticker inactive after 5 consecutive no-data trading days. |
+| Archiver | `python -m app.market.archiver` | 22:00 IST on the 2nd of Jan/Apr/Jul/Oct | Moves rows older than 365 days from the fresh CSV to a Parquet partition (write temp, verify row count and keys, rename, then trim the CSV). |
+
+Storage (`app/data/market/`): `registry.csv`, `fresh/{Ticker}.csv`, `archive/{Ticker}/Compressed_{First}_{Last}.parquet`,
+`indices/{fresh,archive}/...`, `status.json`, `migration.done`, `.lock`. Schema for CSV and Parquet:
+`Ticker, Date, Open, High, Low, Close, AdjClose, Volume`; `(Ticker, Date)` is unique.
+
+Behaviour worth knowing:
+
+- **Validator** (every stage): `SCHEMA`, `NULL_VALUE` (refetched up to 2 passes, then rejected), `OHLC`, `DUP_IN_BATCH`,
+  `NON_TRADING_DAY`. Valid rows commit, bad rows go to `app/data/logs/rejects/<date>_<stage>.csv`; a ticker is rolled back
+  entirely when more than 20% of its returned rows are rejected or a write fails.
+- **Throttle**: 15 s between calls, 2,000 requests/hour, 3 retries (2/4/8 s + jitter). On a rate limit (429/999) the run
+  sleeps 60 min and resumes, at most 3 times; the rest is left for the next day. yfinance hides per-ticker rate-limit
+  errors in its log, so blocks are detected from that log as well as from raised exceptions.
+- **Only final bars are stored**: a session counts as final after 20:00 IST (`sessionFinalAfterIST`).
+- **Run lock** (`.lock`, stale after 6 h): only one stage touches the data at a time; a second stage exits with code 2.
+  All writes are temp file + atomic rename.
+- **Every run** writes `status.json` (read it first if you consume the data; a `.lock` file means a run is in progress)
+  and sends one digest email. A failed or unconfigured email never fails the run.
+- Dates and cut-offs are IST (fixed UTC+5:30); the metadata stages still use the host's local date.
+
+Interpretations of points the TDD leaves open (agreed during implementation):
+
+- **Re-activation**: an inactive ticker is re-activated only if it was absent from at least one healthy registry refresh
+  after going inactive and is listed upstream again (extra registry column `absent_since_inactive`). A dead ticker that
+  simply stays in the upstream list stays inactive.
+- **Restatement check**: each incremental fetch starts at the last stored date (one day of overlap); a differing OHLC on
+  that day (tolerance 0.01%) triggers the same full rebuild as a split.
+- **No-data counting** only happens when the most recent trading day is missing for that ticker, and is skipped for the
+  whole run if no ticker at all returned new rows (an outage, not dead tickers). A failed or deferred fetch never counts.
+- **Migrator** treats a ticker for which Yahoo returns nothing as settled, so it cannot block completion; the Updator then
+  keeps trying it and applies the 5-day rule.
+- **Calendar**: `app/config/nse_calendar.json` ships with empty `holidays` / `specialSessions`; weekends are always
+  handled. Fill it from NSE's yearly holiday circular, otherwise a holiday looks like a missing trading day (it is
+  re-checked daily for 30 days and is never stored).
+
+Configuration: `app/config/market.json` (paths, throttle, retries, thresholds, SMTP host/sender/recipients; set
+`MARKET_CONFIG_PATH` to use another file). SMTP credentials come only from the `SMTP_USER` / `SMTP_PASSWORD`
+environment variables. Copy `market.json`, `indices.json` and `nse_calendar.json` into the host config folder and set the
+`<set at deployment>` mail values.
+
+#### Windows Task Scheduler (market stages)
+
+Use the separate market image (`Dockerfile.market`, built by CI as `swing-trading-market`) and the same bind mounts as the
+metadata pipeline:
+
+```powershell
+docker run --rm `
+  -v C:\ProgramData\ticker-pipeline\data:/app/app/data `
+  -v C:\ProgramData\ticker-pipeline\config:/app/app/config `
+  -e SMTP_USER -e SMTP_PASSWORD `
+  ghcr.io/debarpan-bose-chowdhury/swing-trading-market:latest python -m app.market.updator
+```
+
+Run `python -m app.market.migrator` by hand once after the first healthy upstream run. The Updator (default command of the
+image) runs daily at 21:00 IST, after the upstream Data Source/Filter/Notifier; the Archiver runs 22:00 IST on the 2nd of
+Jan/Apr/Jul/Oct (Task Scheduler has no single "2nd of these months" trigger; use one monthly trigger on day 2 with those
+four months selected). The 2nd never coincides with the upstream Cleaner on the 1st.
+
 ## Container
 
-The image starts the HTTPS service. Mount a directory containing `cert.pem` and
+`Dockerfile` builds the HTTPS service image; `Dockerfile.market` builds the Ticker Data System image (adds
+`yfinance`, `pandas`, `pyarrow`; default command `python -m app.market.updator`). The service image starts the HTTPS service. Mount a directory containing `cert.pem` and
 `key.pem`, and pass their paths into the container:
 
 ```bash
@@ -107,15 +179,16 @@ retries.
 
 - `app/__main__.py`: HTTPS server and `/health` endpoint.
 - `app/metadata/`: ticker-metadata pipeline (`data_source`, `filter`, `cleaner`, `notifier`, shared `common`).
-- `app/config/config.json`: pipeline configuration.
-- `app/data/`: pipeline output (`raw/`, `storage/`, `logs/`, `health.json`); git-ignored.
-- `tests/`: unit tests for the HTTP service and the metadata pipeline.
+- `app/market/`: Ticker Data System (`migrator`, `updator`, `archiver`; shared `validator`, `fetcher`, `store`, `registry`, `ingest`, `tradingcal`, `mailer`, `common`).
+- `app/config/`: `config.json` (metadata pipeline), `market.json`, `indices.json`, `nse_calendar.json` (market stages).
+- `app/data/`: pipeline output (`raw/`, `storage/`, `market/`, `logs/`, `health.json`); git-ignored.
+- `tests/`: unit tests for the HTTP service, the metadata pipeline and the market stages (Yahoo is always faked).
 
 ## CI/CD
 
 `.github/workflows/ci-cd.yml` only calls the reusable workflows in
 [`debarpan-bose-chowdhury/CI-CD`](https://github.com/debarpan-bose-chowdhury/CI-CD) (CI + CodeQL + SBOM, Docker
-build/push to GHCR, staging deploy, smoke + OWASP ZAP DAST, production deploy). Same-repo pull requests also build,
+build/push to GHCR (health-service image, plus the market image `swing-trading-market` from `Dockerfile.market`), staging deploy, smoke + OWASP ZAP DAST, production deploy). Same-repo pull requests also build,
 stage and scan (without moving `:latest`); only pushes to `main` deploy to production. `build.yml` runs the tests and
 the SonarQube scan. Required secrets: `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`, `SONAR_TOKEN`; configure the
 `staging` and `production` GitHub environments before enabling deployments. All pipeline logic is shared and lives in

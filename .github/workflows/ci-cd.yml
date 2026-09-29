@@ -40,6 +40,21 @@ jobs:
       REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
+  # Ticker Data System batch image (no service to stage or scan; it runs from Windows Task Scheduler).
+  build-docker-market:
+    needs: ci
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/docker-build-push.yml@main
+    with:
+      language: python
+      dockerfile-path: Dockerfile.market
+      image-name: swing-trading-market
+      image-tag: ${{ github.sha }}
+      tag-latest: ${{ github.event_name == 'push' }}
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+
   deploy-staging:
     needs: build-docker
     uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-staging.yml@main
