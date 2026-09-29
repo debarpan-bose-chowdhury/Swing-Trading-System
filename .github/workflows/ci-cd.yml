@@ -14,6 +14,8 @@ permissions:
   security-events: write
 
 
+# Reusable workflows come from CI-CD. TEMPORARY: pinned to the CI-CD PR branch while that PR is validated;
+# switch every `uses:` below to `@main` once the CI-CD PR is merged.
 jobs:
   ci:
     name: CI (Python)
