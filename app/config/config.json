@@ -1,0 +1,26 @@
+{
+  "filter": {
+    "minInceptionDays": 365,
+    "capBuckets": [
+      { "name": "LargeCap", "minMarketCap": 2000000000000, "topN": 50 },
+      { "name": "MidCap", "minMarketCap": 500000000000, "topN": 50 },
+      { "name": "SmallCap", "minMarketCap": 100000000000, "topN": 50 }
+    ]
+  },
+  "paths": {
+    "rawData": "app/data/raw",
+    "storage": "app/data/storage",
+    "health": "app/data/health.json"
+  },
+  "nse": {
+    "homeUrl": "https://www.nseindia.com",
+    "equityListUrl": "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv",
+    "dailyReportsUrl": "https://www.nseindia.com/api/daily-reports?key=CM",
+    "maxRetries": 3,
+    "backoffSeconds": [2, 4, 8]
+  },
+  "schedule": {
+    "dailyRunTime": "19:30",
+    "cleanerCron": "0 20 1 1,4,7,10 *"
+  }
+}

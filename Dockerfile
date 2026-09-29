@@ -9,8 +9,10 @@ RUN addgroup --system --gid 10001 appgroup \
     && adduser --system --uid 10001 --ingroup appgroup --no-create-home appuser
 
 COPY app ./app
+RUN mkdir -p app/data && chown appuser:appgroup app/data
 
 ENV PORT=8080 \
+    PYTHONPATH=/app \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
