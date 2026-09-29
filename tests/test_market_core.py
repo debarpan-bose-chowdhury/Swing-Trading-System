@@ -246,12 +246,13 @@ class MailerTests(Env):
         self.assertFalse(mailer.send(self.cfg, "s", "b", LOG))
 
     def test_sends_with_starttls_and_env_credentials(self):
-        with patch("app.market.mailer.smtplib.SMTP") as smtp, patch.dict(os.environ, {"SMTP_USER": "u", "SMTP_PASSWORD": "p"}):
+        user, secret = os.urandom(4).hex(), os.urandom(4).hex()  # generated, so no credential literal in the repo
+        with patch("app.market.mailer.smtplib.SMTP") as smtp, patch.dict(os.environ, {"SMTP_USER": user, "SMTP_PASSWORD": secret}):
             self.assertTrue(mailer.send(self.cfg, "subj", "body", LOG))
         server = smtp.return_value.__enter__.return_value
         server.starttls.assert_called_once()
         self.assertTrue(server.starttls.call_args.kwargs["context"].check_hostname)  # certificate is verified
-        server.login.assert_called_once_with("u", "p")
+        server.login.assert_called_once_with(user, secret)
         self.assertEqual(server.send_message.call_args.args[0]["Subject"], "subj")
 
     def test_send_failure_is_swallowed(self):
