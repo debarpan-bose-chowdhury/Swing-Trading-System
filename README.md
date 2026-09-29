@@ -125,8 +125,7 @@ Interpretations of points the TDD leaves open (agreed during implementation):
   handled. Fill it from NSE's yearly holiday circular, otherwise a holiday looks like a missing trading day (it is
   re-checked daily for 30 days and is never stored).
 
-Configuration: `app/config/market.json` (paths, throttle, retries, thresholds, SMTP host/sender/recipients; set
-`MARKET_CONFIG_PATH` to use another file). SMTP credentials come only from the `SMTP_USER` / `SMTP_PASSWORD`
+Configuration: `app/config/market.json` (paths, throttle, retries, thresholds, SMTP host/sender/recipients). SMTP credentials come only from the `SMTP_USER` / `SMTP_PASSWORD`
 environment variables. Copy `market.json`, `indices.json` and `nse_calendar.json` into the host config folder and set the
 `<set at deployment>` mail values.
 

@@ -7,6 +7,12 @@ import ssl
 from email.message import EmailMessage
 
 
+def _tls_context() -> ssl.SSLContext:
+    ctx = ssl.create_default_context()  # verifies certificate and hostname
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
+
 def send(cfg: dict, subject: str, body: str, log: logging.Logger) -> bool:
     """Best-effort: a failed or unconfigured send is logged and never fails the run."""
     mail = cfg["mail"]
@@ -19,7 +25,7 @@ def send(cfg: dict, subject: str, body: str, log: logging.Logger) -> bool:
     msg.set_content(body)
     try:
         with smtplib.SMTP(mail["smtpHost"], mail["smtpPort"], timeout=30) as smtp:
-            smtp.starttls(context=ssl.create_default_context())
+            smtp.starttls(context=_tls_context())
             if os.environ.get("SMTP_USER"):
                 smtp.login(os.environ["SMTP_USER"], os.environ.get("SMTP_PASSWORD", ""))
             smtp.send_message(msg)

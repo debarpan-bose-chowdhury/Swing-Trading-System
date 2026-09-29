@@ -189,7 +189,7 @@ class CommonTests(Env):
     def run_stage(self, run, expect_exit: int | None):
         cfg_file = self.root / "market.json"
         cfg_file.write_text(json.dumps(self.cfg))
-        with patch.dict(os.environ, {"MARKET_CONFIG_PATH": str(cfg_file)}), patch("app.market.mailer.send") as send:
+        with patch("app.market.common.CONFIG_PATH", str(cfg_file)), patch("app.market.mailer.send") as send:
             if expect_exit is None:
                 common.run_stage("updator", run)
             else:

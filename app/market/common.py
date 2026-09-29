@@ -22,7 +22,7 @@ class Busy(Exception):
 
 
 def load_config() -> dict:
-    return json.loads(Path(os.environ.get("MARKET_CONFIG_PATH", CONFIG_PATH)).read_text(encoding="utf-8"))
+    return json.loads(Path(CONFIG_PATH).read_text(encoding="utf-8"))
 
 
 def atomic(path: Path, write) -> None:

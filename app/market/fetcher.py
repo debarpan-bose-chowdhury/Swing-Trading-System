@@ -106,7 +106,7 @@ class Fetcher:
                     self.log.error("Fetch of %s failed after retries: %r", symbols[:3], e)
                     return None
                 backoff = self.c["backoffSeconds"]
-                time.sleep(backoff[min(attempt, len(backoff) - 1)] + random.random())
+                time.sleep(backoff[min(attempt, len(backoff) - 1)] + random.SystemRandom().random())
                 attempt += 1
             finally:
                 self.last_end = time.monotonic()

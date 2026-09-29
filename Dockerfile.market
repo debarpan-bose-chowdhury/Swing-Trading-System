@@ -7,10 +7,11 @@ LABEL org.opencontainers.image.source="https://github.com/debarpan-bose-chowdhur
 
 WORKDIR /app
 
-# Dependencies come from pyproject.toml (single source of truth); copied first so this layer caches.
-COPY pyproject.toml .
-RUN python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml', 'rb'))['project']['dependencies']))" \
-    | pip install --no-cache-dir -r /dev/stdin
+# Dependencies are installed from uv.lock (exact, wheels only) into the system environment.
+COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir --only-binary :all: uv==0.8.17 \
+    && UV_PROJECT_ENVIRONMENT=/usr/local UV_NO_BUILD=1 uv sync --frozen --no-dev --no-install-project \
+    && pip uninstall -y uv
 
 RUN addgroup --system --gid 10001 appgroup \
     && adduser --system --uid 10001 --ingroup appgroup --no-create-home appuser
