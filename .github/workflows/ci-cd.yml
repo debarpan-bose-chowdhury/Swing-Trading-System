@@ -6,377 +6,66 @@ on:
   pull_request:
     branches: [main]
 
+# Caps the permissions of every reusable-workflow job below.
 permissions:
   contents: read
+  packages: write
+  deployments: write
+  security-events: write
+
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        with:
-          python-version: "3.12"
-      - shell: bash
-        run: |
-          python -m pip install --upgrade pip==25.2
-          python -m pip install --only-binary :all: --no-deps .
-      - shell: bash
-        run: python -m unittest discover -s tests -v
+    name: CI (Python)
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/ci.yml@claude/loving-einstein-f191mp
+    with:
+      language: python
+      python-install-command: pip install -e . pytest pytest-cov
+      python-test-command: python -m pytest
+      codeql-languages: python
 
-  codeql:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938
-        with:
-          languages: python
-      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938
-
+  # Same-repo PRs also build/stage/scan (without moving :latest) so deployment problems surface before merge.
   build-docker:
-    needs: [ci, codeql]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      image-digest: ${{ steps.build.outputs.digest }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - id: meta
-        shell: bash
-        run: |
-          set -euo pipefail
-          image_name='swing-trading-system'
-          image_ref="ghcr.io/debarpan-bose-chowdhury/$image_name:${{ github.sha }}"
-          echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
-          echo "image-name=$image_name" >> "$GITHUB_OUTPUT"
+    needs: ci
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/docker-build-push.yml@claude/loving-einstein-f191mp
+    with:
+      language: python
+      dockerfile-path: Dockerfile
+      image-name: swing-trading-system
+      image-tag: ${{ github.sha }}
+      tag-latest: ${{ github.event_name == 'push' }}
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Login to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
-      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
-      - id: build
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
-        with:
-          context: .
-          file: Dockerfile
-          push: true
-          tags: |
-            ${{ steps.meta.outputs.image_ref }}
-            ghcr.io/debarpan-bose-chowdhury/${{ steps.meta.outputs.image-name }}:latest
-          provenance: true
-          sbom: true
-          cache-from: type=registry,ref=ghcr.io/debarpan-bose-chowdhury/${{ steps.meta.outputs.image-name }}:buildcache
-          cache-to: type=registry,ref=ghcr.io/debarpan-bose-chowdhury/${{ steps.meta.outputs.image-name }}:buildcache,mode=max
-          platforms: linux/amd64,linux/arm64
   deploy-staging:
     needs: build-docker
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      deployments: write
-      packages: read
-      contents: read
-    env:
-      IMAGE_REF: ghcr.io/debarpan-bose-chowdhury/swing-trading-system:${{ github.sha }}
-      COMPOSE_FILE: docker-compose.staging.yml
-      COMPOSE_SERVICE: app
-      HEALTH_CHECK_URL: https://localhost:8080/health
-      HEALTH_CHECK_MAX_RETRIES: "30"
-      HEALTH_CHECK_DELAY: "10"
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - name: Login to GHCR
-        if: ${{ startsWith(env.IMAGE_REF, 'ghcr.io/') }}
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
-      - name: Create local TLS certificate
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p certs
-          openssl req -x509 -nodes -newkey rsa:2048 \
-            -keyout certs/key.pem \
-            -out certs/cert.pem \
-            -days 1 \
-            -subj '/CN=localhost' \
-            -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1'
-          # container runs as non-root appuser (uid 10001); make key readable via the read-only bind mount
-          chmod 644 certs/key.pem certs/cert.pem
-      - name: Pull latest image
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker pull "$IMAGE_REF"
-      - name: Deploy via Docker Compose
-        shell: bash
-        run: |
-          set -euo pipefail
-          export IMAGE_REF
-          docker compose -f "$COMPOSE_FILE" down || true
-          docker compose -f "$COMPOSE_FILE" up -d "$COMPOSE_SERVICE"
-      - name: Wait for health check
-        shell: bash
-        run: |
-          set -euo pipefail
-          for i in $(seq 1 "$HEALTH_CHECK_MAX_RETRIES"); do
-            echo "[${i}/${HEALTH_CHECK_MAX_RETRIES}] Checking health: ${HEALTH_CHECK_URL}"
-            if curl -ksf "$HEALTH_CHECK_URL" >/dev/null 2>&1; then
-              echo "✓ Health check passed"
-              exit 0
-            fi
-            if [ "$i" -lt "$HEALTH_CHECK_MAX_RETRIES" ]; then
-              echo "  Waiting ${HEALTH_CHECK_DELAY}s before retry..."
-              sleep "$HEALTH_CHECK_DELAY"
-            fi
-          done
-
-          echo "✗ Health check failed after $HEALTH_CHECK_MAX_RETRIES attempts" >&2
-          docker compose -f "$COMPOSE_FILE" logs
-          exit 1
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-staging.yml@claude/loving-einstein-f191mp
+    with:
+      image-name: swing-trading-system
+      image-tag: ${{ github.sha }}
+      compose-file: docker-compose.staging.yml
+      health-check-url: https://localhost:8080/health
+      tls-cert: true
 
   dast-scan:
     needs: deploy-staging
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      contents: read
-      packages: read
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Login to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
-      
-      - uses: ./.github/actions/start-app
-        with:
-          image-ref: ghcr.io/debarpan-bose-chowdhury/swing-trading-system:${{ github.sha }}
-          compose-file: docker-compose.staging.yml
-      
-      - name: Smoke test endpoints
-        run: curl -sf --cacert certs/cert.pem https://localhost:8080/health
-
-      - name: Run OWASP ZAP scan
-        shell: bash
-        env:
-          TARGET_URL: https://localhost:8080
-        run: |
-          set -euo pipefail
-          echo "Starting OWASP ZAP scan of ${TARGET_URL}..."
-          # --network host lets the ZAP container reach the app published on the runner's localhost
-          docker run --rm --network host \
-            -v "$PWD:/zap/wrk" \
-            -e TARGET_URL \
-            -e ZAP_OPTS="-config api.disablekey=true" \
-            ghcr.io/zaproxy/zaproxy:stable \
-            bash -lc '
-              set -euo pipefail
-              echo "Running baseline scan..."
-              zap-baseline.py -t "$TARGET_URL" -J /zap/wrk/baseline-report.json || true
-              echo "Running full scan..."
-              zap-full-scan.py -t "$TARGET_URL" -J /zap/wrk/zap-report.json -r /zap/wrk/zap-report.html || true
-            '
-
-      - name: Convert ZAP findings to SARIF
-        shell: bash
-        env:
-          TARGET_URL: https://localhost:8080
-        run: |
-          set -euo pipefail
-          cat > /tmp/zap_to_sarif.py <<'PY'
-          import json
-          import sys
-
-          target_url = sys.argv[1]
-
-          with open('zap-report.json', 'r', encoding='utf-8') as f:
-              zap_data = json.load(f)
-
-          sarif_output = {
-              'version': '2.1.0',
-              'runs': [{
-                  'tool': {
-                      'driver': {
-                          'name': 'OWASP ZAP',
-                          'informationUri': 'https://www.zaproxy.org'
-                      }
-                  },
-                  'results': []
-              }]
-          }
-
-          for alert in zap_data.get('site', [{}])[0].get('alerts', []):
-              risk_code = int(alert.get('riskcode', 0))
-              severity_map = {0: 'note', 1: 'warning', 2: 'error', 3: 'error', 4: 'error'}
-              result = {
-                  'ruleId': str(alert.get('pluginid', 'unknown')),
-                  'message': {'text': alert.get('name', 'Unknown Alert')},
-                  'level': severity_map.get(risk_code, 'warning'),
-                  'locations': [{
-                      'physicalLocation': {
-                          'artifactLocation': {'uri': target_url},
-                          'address': {'uri': target_url}
-                      }
-                  }]
-              }
-              sarif_output['runs'][0]['results'].append(result)
-
-          with open('zap-report.sarif', 'w', encoding='utf-8') as f:
-              json.dump(sarif_output, f, indent=2)
-          PY
-          python3 /tmp/zap_to_sarif.py "$TARGET_URL"
-
-      - name: Upload OWASP ZAP reports
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: zap-scan-reports
-          path: |
-            baseline-report.json
-            zap-report.json
-            zap-report.html
-            zap-report.sarif
-          if-no-files-found: ignore
-          retention-days: 30
-
-      - name: Parse and gate on findings
-        shell: bash
-        env:
-          THRESHOLD: medium
-        run: |
-          set -euo pipefail
-
-          if [ ! -f zap-report.json ]; then
-            echo "Missing zap-report.json; scan did not complete."
-            exit 1
-          fi
-
-          echo "DAST Threshold: ${THRESHOLD}"
-          echo ""
-
-          cat > /tmp/check_zap_threshold.py <<'PY'
-          import json
-          import os
-          import sys
-
-          threshold = os.environ.get('THRESHOLD', 'medium').lower()
-          severity_order = ['info', 'low', 'medium', 'high', 'critical']
-          threshold_level = severity_order.index(threshold) if threshold in severity_order else severity_order.index('medium')
-
-          with open('zap-report.json', 'r', encoding='utf-8') as f:
-              data = json.load(f)
-
-          severity_counts = {sev: 0 for sev in severity_order}
-          for alert in data.get('site', [{}])[0].get('alerts', []):
-              risk_code = int(alert.get('riskcode', 0))
-              severity_map = {0: 'info', 1: 'low', 2: 'medium', 3: 'high', 4: 'critical'}
-              severity = severity_map.get(risk_code, 'info')
-              severity_counts[severity] += 1
-              print(f"  [{severity.upper()}] {alert.get('name', 'Unknown Alert')}")
-
-          print('\nFindings Summary:')
-          for sev in severity_order:
-              print(f"  {sev.capitalize()}: {severity_counts[sev]}")
-
-          blocking_severities = severity_order[threshold_level:]
-          blocking_count = sum(severity_counts[s] for s in blocking_severities)
-          if blocking_count > 0:
-              print(f"\n✗ DAST scan FAILED: {blocking_count} finding(s) at or above threshold")
-              sys.exit(1)
-
-          print('\n✓ DAST scan PASSED')
-          PY
-
-          THRESHOLD="${THRESHOLD}" python3 /tmp/check_zap_threshold.py
-
-      - name: Upload to GitHub Security
-        if: always()
-        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938
-        with:
-          sarif_file: zap-report.sarif
-          category: DAST-OWASP-ZAP
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/dast-smoke.yml@claude/loving-einstein-f191mp
+    with:
+      target-url: https://localhost:8080
+      image-ref: ghcr.io/debarpan-bose-chowdhury/swing-trading-system:${{ github.sha }}
+      compose-file: docker-compose.staging.yml
+      tls-cert: true
+      smoke-endpoints: /health
 
   deploy-production:
     needs: [build-docker, dast-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      deployments: write
-      packages: read
-      contents: read
-    env:
-      IMAGE_REF: ghcr.io/debarpan-bose-chowdhury/swing-trading-system:${{ github.sha }}
-      COMPOSE_FILE: docker-compose.yml
-      COMPOSE_SERVICE: app
-      HEALTH_CHECK_URL: https://localhost:8080/health
-      HEALTH_CHECK_MAX_RETRIES: "30"
-      HEALTH_CHECK_DELAY: "10"
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - name: Login to GHCR
-        if: ${{ startsWith(env.IMAGE_REF, 'ghcr.io/') }}
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
-      - name: Create local TLS certificate
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p certs
-          openssl req -x509 -nodes -newkey rsa:2048 \
-            -keyout certs/key.pem \
-            -out certs/cert.pem \
-            -days 1 \
-            -subj '/CN=localhost' \
-            -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1'
-          # container runs as non-root appuser (uid 10001); make key readable via the read-only bind mount
-          chmod 644 certs/key.pem certs/cert.pem
-      - name: Pull latest image
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker pull "$IMAGE_REF"
-      - name: Deploy via Docker Compose
-        shell: bash
-        run: |
-          set -euo pipefail
-          export IMAGE_REF
-          docker compose -f "$COMPOSE_FILE" down || true
-          docker compose -f "$COMPOSE_FILE" up -d "$COMPOSE_SERVICE"
-      - name: Wait for health check
-        shell: bash
-        run: |
-          set -euo pipefail
-          for i in $(seq 1 "$HEALTH_CHECK_MAX_RETRIES"); do
-            echo "[${i}/${HEALTH_CHECK_MAX_RETRIES}] Checking health: ${HEALTH_CHECK_URL}"
-            if curl -ksf "$HEALTH_CHECK_URL" >/dev/null 2>&1; then
-              echo "✓ Health check passed"
-              exit 0
-            fi
-            if [ "$i" -lt "$HEALTH_CHECK_MAX_RETRIES" ]; then
-              echo "  Waiting ${HEALTH_CHECK_DELAY}s before retry..."
-              sleep "$HEALTH_CHECK_DELAY"
-            fi
-          done
-
-          echo "✗ Health check failed after $HEALTH_CHECK_MAX_RETRIES attempts" >&2
-          docker compose -f "$COMPOSE_FILE" logs
-          exit 1
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-production.yml@claude/loving-einstein-f191mp
+    with:
+      image-name: swing-trading-system
+      image-tag: ${{ github.sha }}
+      compose-file: docker-compose.yml
+      health-check-url: https://localhost:8080/health
+      tls-cert: true
