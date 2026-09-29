@@ -7,6 +7,11 @@ name = "swing-trading-system"
 version = "0.1.0"
 description = "Swing trading system service"
 requires-python = ">=3.12"
+dependencies = [
+    "yfinance>=1.7",
+    "pandas>=3.0",
+    "pyarrow>=20",
+]
 
 [tool.pytest.ini_options]
 addopts = "--cov=app --cov-branch --cov-report=term-missing"

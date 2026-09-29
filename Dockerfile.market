@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+# Ticker Data System (migrator / updator / archiver). Separate from the health-service image because it
+# needs pandas, pyarrow and yfinance. Stages run by overriding the command, e.g. `python -m app.market.migrator`.
+FROM python:3.12-slim
+
+LABEL org.opencontainers.image.source="https://github.com/debarpan-bose-chowdhury/Swing-Trading-System"
+
+WORKDIR /app
+
+# Dependencies are installed from uv.lock (exact, wheels only) into the system environment.
+COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir --only-binary :all: uv==0.8.17 \
+    && UV_PROJECT_ENVIRONMENT=/usr/local UV_NO_BUILD=1 uv sync --frozen --no-dev --no-install-project \
+    && pip uninstall -y uv
+
+RUN addgroup --system --gid 10001 appgroup \
+    && adduser --system --uid 10001 --ingroup appgroup --no-create-home appuser
+
+COPY app ./app
+RUN mkdir -p app/data && chown appuser:appgroup app/data
+
+ENV PYTHONPATH=/app \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+USER appuser
+
+CMD ["python", "-m", "app.market.updator"]

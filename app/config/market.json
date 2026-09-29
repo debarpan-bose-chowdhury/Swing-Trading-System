@@ -1,0 +1,41 @@
+{
+  "paths": {
+    "market": "app/data/market",
+    "upstreamStorage": "app/data/storage",
+    "upstreamHealth": "app/data/health.json",
+    "logs": "app/data/logs",
+    "calendar": "app/config/nse_calendar.json",
+    "indices": "app/config/indices.json"
+  },
+  "fetch": {
+    "batchSize": 50,
+    "batchGapSeconds": 15,
+    "hourlyRequestBudget": 2000,
+    "blockPauseMinutes": 60,
+    "maxBlockPausesPerRun": 3,
+    "maxRetries": 3,
+    "backoffSeconds": [2, 4, 8],
+    "nullRefetchPasses": 2,
+    "sessionFinalAfterIST": "20:00"
+  },
+  "validator": {
+    "rejectShareRollback": 0.20
+  },
+  "updator": {
+    "lookbackDays": 30,
+    "deadTickerNoDataDays": 5,
+    "dailyRunTime": "21:00"
+  },
+  "archiver": {
+    "cutoffDays": 365,
+    "cron": "0 22 2 1,4,7,10 *",
+    "parquet": { "compression": "zstd" }
+  },
+  "lock": { "staleAfterHours": 6 },
+  "mail": {
+    "smtpHost": "<set at deployment>",
+    "smtpPort": 587,
+    "sender": "<set at deployment>",
+    "recipients": ["<set at deployment>"]
+  }
+}
