@@ -1,0 +1,21 @@
+name: Image Scan
+
+# Weekly vulnerability scan of every published image (the batch image is never deployed here,
+# so this is the only place it is re-checked after its build).
+on:
+  schedule:
+    - cron: '17 3 * * 1'  # Mondays 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+  security-events: write
+  issues: write
+
+jobs:
+  scan:
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/image-periodic-scan.yml@main
+    with:
+      images: '["debarpan-bose-chowdhury/swing-trading-system", "debarpan-bose-chowdhury/swing-trading-market"]'
+      tags-to-scan: '["latest"]'

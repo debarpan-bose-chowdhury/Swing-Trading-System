@@ -170,7 +170,7 @@ health check:
 docker compose up
 ```
 
-Set `APP_PORT` to change the host port, or `IMAGE_REF` to select a different
+Set `APP_PORT` to change the host port, or `IMAGE_REF_SWING_TRADING_SYSTEM` (or `IMAGE_REF`) to select a different
 image. The staging configuration uses the same settings with fewer health-check
 retries.
 
@@ -186,9 +186,27 @@ retries.
 ## CI/CD
 
 `.github/workflows/ci-cd.yml` only calls the reusable workflows in
-[`debarpan-bose-chowdhury/CI-CD`](https://github.com/debarpan-bose-chowdhury/CI-CD) (CI + CodeQL + SBOM, Docker
-build/push to GHCR (health-service image, plus the market image `swing-trading-market` from `Dockerfile.market`), staging deploy, smoke + OWASP ZAP DAST, production deploy). Same-repo pull requests also build,
+[`debarpan-bose-chowdhury/CI-CD`](https://github.com/debarpan-bose-chowdhury/CI-CD) (CI + CodeQL + SBOM, multi-image
+Docker build/push to GHCR, staging deploy, smoke + OWASP ZAP DAST, production deploy). Same-repo pull requests also build,
 stage and scan (without moving `:latest`); only pushes to `main` deploy to production. `build.yml` runs the tests and
 the SonarQube scan. Required secrets: `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`, `SONAR_TOKEN`; configure the
 `staging` and `production` GitHub environments before enabling deployments. All pipeline logic is shared and lives in
-CI-CD; this repo only supplies the inputs (image name, compose files, HTTPS health URL, `tls-cert: true`).
+CI-CD; this repo only supplies the inputs (the `images` list, compose files, HTTPS health URL, `tls-cert: true`).
+
+Two images are built in one `build-docker` job (an `images` list passed to the shared workflow):
+
+| Image | Dockerfile | Role | Pipeline |
+|---|---|---|---|
+| `swing-trading-system` | `Dockerfile` | `service` | build, staging deploy, DAST, production deploy |
+| `swing-trading-market` | `Dockerfile.market` | `batch` | build, smoke-run, weekly scan (runs from Windows Task Scheduler, never deployed) |
+
+- **Smoke-run:** after the push, CI runs `docker run <market image> python -m app.market.updator --check`. `--check`
+  (available on every market and metadata stage) loads the config (and the trading calendar), proves the dependencies
+  import, prints `<stage>: check ok` and exits 0, or exits 1 on a config error. It contacts no network and writes no data,
+  logs or lock files.
+- **Compose:** the deploy exports `IMAGE_REF_SWING_TRADING_SYSTEM` (name upper-cased, `-` becomes `_`); the compose files
+  read it and fall back to `IMAGE_REF`, then `:latest`.
+- **Scan:** `image-scan.yml` scans both images weekly (Mondays 03:17 UTC) and on demand (`workflow_dispatch`).
+- **Adding an image:** add an entry (`name`, `language`, `dockerfile`, `role`, ...) to `images` in `ci-cd.yml`; for a
+  service also give it a compose service using `IMAGE_REF_<NAME>` and a `health-url`. See the CI-CD README section
+  "Multi-image pipelines".

@@ -144,8 +144,34 @@ class Report:
         return f"[Ticker Data] {self.stage} {self.status().upper()} {iso(now.date())}", "\n".join(lines)
 
 
-def run_stage(stage: str, run) -> None:
-    """Common entry point: lock, run, then reject file + status.json + digest. Exit 2 if busy, 1 on failure."""
+def check_stage(stage: str) -> int:
+    """`--check`: confirm the config and calendar load, with no network, lock, log file or data writes.
+
+    Importing the stage module (which `python -m` already did) proves its dependencies are installed.
+    """
+    from app.market.tradingcal import Calendar  # local import: only needed here
+
+    try:
+        cfg = load_config()
+        missing = [k for k in ("market", "logs", "calendar") if k not in cfg["paths"]]
+        if missing:
+            raise KeyError(f"paths missing from {CONFIG_PATH}: {', '.join(missing)}")
+        Calendar(cfg["paths"]["calendar"])
+    except Exception as e:
+        print(f"{stage}: check FAILED: {e!r}", file=sys.stderr)
+        return 1
+    print(f"{stage}: check ok")
+    return 0
+
+
+def run_stage(stage: str, run, argv: list[str] | None = None) -> None:
+    """Common entry point: lock, run, then reject file + status.json + digest. Exit 2 if busy, 1 on failure.
+
+    With `--check` on the command line the stage only validates its environment (see check_stage).
+    """
+    if "--check" in (sys.argv[1:] if argv is None else argv):
+        sys.exit(check_stage(stage))
+
     from app.market import mailer  # local import keeps smtplib out of the other modules
 
     cfg, now = load_config(), datetime.now(IST)
