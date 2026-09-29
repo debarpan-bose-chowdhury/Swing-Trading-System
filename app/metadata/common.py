@@ -63,8 +63,31 @@ def setup_logging(stage: str, cfg: dict, today: date) -> logging.Logger:
     return logger
 
 
-def run_stage(stage: str, run) -> None:
-    """Common entry point: load config, log to file+stdout, exit non-zero on failure."""
+def check_stage(stage: str) -> int:
+    """`--check`: confirm the config loads, with no network access, log file or data writes.
+
+    Importing the stage module (which `python -m` already did) proves its dependencies are installed.
+    """
+    try:
+        cfg = load_config()
+        missing = [k for k in ("rawData", "storage", "health") if k not in cfg["paths"]]
+        if missing:
+            raise KeyError(f"paths missing from the config: {', '.join(missing)}")
+    except Exception as e:
+        print(f"{stage}: check FAILED: {e!r}", file=sys.stderr)
+        return 1
+    print(f"{stage}: check ok")
+    return 0
+
+
+def run_stage(stage: str, run, argv: list[str] | None = None) -> None:
+    """Common entry point: load config, log to file+stdout, exit non-zero on failure.
+
+    With `--check` on the command line the stage only validates its environment (see check_stage).
+    """
+    if "--check" in (sys.argv[1:] if argv is None else argv):
+        sys.exit(check_stage(stage))
+
     cfg, today = load_config(), date.today()
     log = setup_logging(stage, cfg, today)
     try:

@@ -15,6 +15,12 @@ permissions:
 
 
 # All pipeline logic is shared and lives in CI-CD; this file only supplies this repo's inputs.
+#
+# Two images are built from this repo (both Python):
+#   swing-trading-system  role=service  HTTPS health service, staged, DAST-scanned and deployed
+#   swing-trading-market  role=batch    Ticker Data System stages; built, smoke-run and scanned only
+#                                       (it runs from Windows Task Scheduler, so nothing is deployed)
+# `images` cannot be shared through `env` at job level, so each job below lists what it needs.
 jobs:
   ci:
     name: CI (Python)
@@ -26,31 +32,21 @@ jobs:
       codeql-languages: python
 
   # Same-repo PRs also build/stage/scan (without moving :latest) so deployment problems surface before merge.
+  # The market image's smoke-run executes inside this workflow, so a broken market image blocks staging.
   build-docker:
     needs: ci
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/docker-build-push.yml@main
     with:
-      language: python
-      dockerfile-path: Dockerfile
-      image-name: swing-trading-system
       image-tag: ${{ github.sha }}
       tag-latest: ${{ github.event_name == 'push' }}
-    secrets:
-      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-
-  # Ticker Data System batch image (no service to stage or scan; it runs from Windows Task Scheduler).
-  build-docker-market:
-    needs: ci
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/docker-build-push.yml@main
-    with:
-      language: python
-      dockerfile-path: Dockerfile.market
-      image-name: swing-trading-market
-      image-tag: ${{ github.sha }}
-      tag-latest: ${{ github.event_name == 'push' }}
+      images: >-
+        [
+          {"name": "swing-trading-system", "language": "python", "dockerfile": "Dockerfile",
+           "role": "service", "compose-service": "app", "health-url": "https://localhost:8080/health"},
+          {"name": "swing-trading-market", "language": "python", "dockerfile": "Dockerfile.market",
+           "role": "batch", "smoke-command": "python -m app.market.updator --check"}
+        ]
     secrets:
       REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
@@ -59,29 +55,42 @@ jobs:
     needs: build-docker
     uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-staging.yml@main
     with:
-      image-name: swing-trading-system
       image-tag: ${{ github.sha }}
       compose-file: docker-compose.staging.yml
-      health-check-url: https://localhost:8080/health
       tls-cert: true
+      images: >-
+        [
+          {"name": "swing-trading-system", "role": "service", "compose-service": "app",
+           "health-url": "https://localhost:8080/health"},
+          {"name": "swing-trading-market", "role": "batch"}
+        ]
 
   dast-scan:
     needs: deploy-staging
     uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/dast-smoke.yml@main
     with:
       target-url: https://localhost:8080
-      image-ref: ghcr.io/debarpan-bose-chowdhury/swing-trading-system:${{ github.sha }}
+      image-tag: ${{ github.sha }}
       compose-file: docker-compose.staging.yml
       tls-cert: true
       smoke-endpoints: /health
+      images: >-
+        [
+          {"name": "swing-trading-system", "role": "service", "compose-service": "app"},
+          {"name": "swing-trading-market", "role": "batch"}
+        ]
 
   deploy-production:
     needs: [build-docker, dast-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-production.yml@main
     with:
-      image-name: swing-trading-system
       image-tag: ${{ github.sha }}
       compose-file: docker-compose.yml
-      health-check-url: https://localhost:8080/health
       tls-cert: true
+      images: >-
+        [
+          {"name": "swing-trading-system", "role": "service", "compose-service": "app",
+           "health-url": "https://localhost:8080/health"},
+          {"name": "swing-trading-market", "role": "batch"}
+        ]
