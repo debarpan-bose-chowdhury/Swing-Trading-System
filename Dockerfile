@@ -12,6 +12,7 @@ COPY app ./app
 RUN mkdir -p app/data && chown appuser:appgroup app/data
 
 ENV PORT=8080 \
+    PYTHONPATH=/app \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
