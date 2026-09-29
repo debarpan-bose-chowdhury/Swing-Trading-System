@@ -14,12 +14,11 @@ permissions:
   security-events: write
 
 
-# Reusable workflows come from CI-CD. TEMPORARY: pinned to the CI-CD PR branch while that PR is validated;
-# switch every `uses:` below to `@main` once the CI-CD PR is merged.
+# All pipeline logic is shared and lives in CI-CD; this file only supplies this repo's inputs.
 jobs:
   ci:
     name: CI (Python)
-    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/ci.yml@claude/loving-einstein-f191mp
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/ci.yml@main
     with:
       language: python
       python-install-command: pip install -e . pytest pytest-cov
@@ -30,7 +29,7 @@ jobs:
   build-docker:
     needs: ci
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/docker-build-push.yml@claude/loving-einstein-f191mp
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/docker-build-push.yml@main
     with:
       language: python
       dockerfile-path: Dockerfile
@@ -43,7 +42,7 @@ jobs:
 
   deploy-staging:
     needs: build-docker
-    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-staging.yml@claude/loving-einstein-f191mp
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-staging.yml@main
     with:
       image-name: swing-trading-system
       image-tag: ${{ github.sha }}
@@ -53,7 +52,7 @@ jobs:
 
   dast-scan:
     needs: deploy-staging
-    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/dast-smoke.yml@claude/loving-einstein-f191mp
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/dast-smoke.yml@main
     with:
       target-url: https://localhost:8080
       image-ref: ghcr.io/debarpan-bose-chowdhury/swing-trading-system:${{ github.sha }}
@@ -64,7 +63,7 @@ jobs:
   deploy-production:
     needs: [build-docker, dast-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-production.yml@claude/loving-einstein-f191mp
+    uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/deploy-production.yml@main
     with:
       image-name: swing-trading-system
       image-tag: ${{ github.sha }}
