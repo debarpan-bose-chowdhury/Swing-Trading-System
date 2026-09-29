@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 SECURITY_HEADERS = {
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    "Content-Security-Policy": "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
     "X-Content-Type-Options": "nosniff",
     "Cache-Control": "no-store",
