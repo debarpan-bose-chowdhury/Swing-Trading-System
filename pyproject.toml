@@ -16,6 +16,7 @@ dependencies = [
 [tool.pytest.ini_options]
 addopts = "--cov=app --cov-branch --cov-report=term-missing"
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.coverage.run]
 source = ["app"]

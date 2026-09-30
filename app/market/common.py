@@ -14,6 +14,7 @@ import pandas as pd
 
 CONFIG_PATH = "app/config/market.json"
 IST = timezone(timedelta(hours=5, minutes=30))  # India has no DST
+REPLACE_ATTEMPTS = 6
 COLS = ["Ticker", "Date", "Open", "High", "Low", "Close", "AdjClose", "Volume"]
 
 
@@ -42,7 +43,15 @@ def atomic(path: Path, write) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     write(tmp)
-    os.replace(tmp, path)
+    for attempt in range(REPLACE_ATTEMPTS):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            # Windows: a sync client (OneDrive), indexer or antivirus can briefly hold the destination open.
+            if attempt == REPLACE_ATTEMPTS - 1:
+                raise
+            time.sleep(0.1 * 2**attempt)
 
 
 def write_csv(df: pd.DataFrame, path: Path, **kw) -> None:
@@ -164,6 +173,14 @@ def check_stage(stage: str) -> int:
     return 0
 
 
+def require_parquet_engine() -> None:
+    """Fail fast, before any network fetch, when no parquet engine is installed."""
+    try:
+        import pyarrow  # noqa: F401
+    except ImportError as e:
+        raise RuntimeError("pyarrow is required for parquet storage; run `pip install -e .`") from e
+
+
 def run_stage(stage: str, run, argv: list[str] | None = None) -> None:
     """Common entry point: lock, run, then reject file + status.json + digest. Exit 2 if busy, 1 on failure.
 
@@ -180,6 +197,7 @@ def run_stage(stage: str, run, argv: list[str] | None = None) -> None:
     try:
         with run_lock(cfg, log):
             try:
+                require_parquet_engine()
                 run(cfg, now, log, report)
             except Exception as e:
                 log.exception("%s failed", stage)

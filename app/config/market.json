@@ -16,7 +16,15 @@
     "maxRetries": 3,
     "backoffSeconds": [2, 4, 8],
     "nullRefetchPasses": 2,
-    "sessionFinalAfterIST": "20:00"
+    "sessionFinalAfterIST": "20:00",
+    "historyStart": "1997-01-01"
+  },
+  "calendarSync": {
+    "homeUrl": "https://www.nseindia.com",
+    "holidayUrl": "https://www.nseindia.com/api/holiday-master?type=trading&year={year}",
+    "firstYear": 2011,
+    "maxRetries": 3,
+    "backoffSeconds": [2, 4, 8]
   },
   "validator": {
     "rejectShareRollback": 0.20

@@ -10,7 +10,8 @@ NULL_VALUE = "NULL_VALUE"
 
 
 def validate(df: pd.DataFrame, cal: Calendar) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Return (valid, rejects). First failing rule wins: SCHEMA, NULL_VALUE, OHLC, DUP_IN_BATCH, NON_TRADING_DAY.
+    """Return (valid, rejects). First failing rule wins: SCHEMA, NULL_VALUE, OHLC, DUP_IN_BATCH, NON_TRADING_DAY
+    (a zero-volume bar on a non-trading day).
 
     NULL_VALUE rows are the caller's to refetch; those still null after the refetch passes stay rejected.
     """
@@ -37,7 +38,8 @@ def validate(df: pd.DataFrame, cal: Calendar) -> tuple[pd.DataFrame, pd.DataFram
         (num.High < num[["Open", "Close", "Low"]].max(axis=1)) | (num.Low > num[["Open", "Close", "High"]].min(axis=1)) | (num.Volume < 0),
     )
     flag("DUP_IN_BATCH", df.duplicated(["Ticker", "Date"], keep=False))
-    flag("NON_TRADING_DAY", ~day.dt.date.map(lambda d: cal.is_trading_day(d) if pd.notna(d) else True))
+    # Yahoo pads holidays with flat zero-volume bars; a bar with volume is proof the exchange traded (e.g. a Muhurat session).
+    flag("NON_TRADING_DAY", ~day.dt.date.map(lambda d: cal.is_trading_day(d) if pd.notna(d) else True) & (num.Volume == 0))
 
     ok = reason.isna()
     valid = df[ok].copy()

@@ -33,9 +33,10 @@ def build_series(cfg: dict, symbols: list[str], cutoff: str) -> list[Series]:
     return [Series(s, f"{s}.NS", s, eq) for s in symbols] + [Series(i, i, i.lstrip("^"), idx) for i in indices]
 
 
-def _clip(frame: pd.DataFrame, yahoo: str, ticker: str, last: str) -> pd.DataFrame:
-    """One ticker's rows up to the last final session (no partial bars), Ticker renamed to the stored form."""
-    rows = frame[(frame.Ticker == yahoo) & (frame.Date <= last)]
+def _clip(frame: pd.DataFrame, yahoo: str, ticker: str, last: str, first: str = "") -> pd.DataFrame:
+    """One ticker's rows from `first` (the history floor) up to the last final session (no partial bars),
+    Ticker renamed to the stored form."""
+    rows = frame[(frame.Ticker == yahoo) & (frame.Date >= first) & (frame.Date <= last)]
     return rows.assign(Ticker=ticker)
 
 
@@ -50,7 +51,7 @@ def _validated(fx: Fetcher, cal: Calendar, cfg: dict, s: Series, raw: pd.DataFra
         frame = fx.fetch([s.yahoo], start=min(keys), end=shift(max(keys), 1))
         if frame is None:
             break
-        new = _clip(frame, s.yahoo, s.ticker, last)
+        new = _clip(frame, s.yahoo, s.ticker, last, cfg["fetch"].get("historyStart", ""))
         new = new[new.Date.isin(keys)]
         v2, r2 = validate(new, cal)
         valid = pd.concat([valid, v2], ignore_index=True)
@@ -74,7 +75,7 @@ def fetch_valid(fx: Fetcher, cal: Calendar, cfg: dict, report: Report, series: l
                 if frame is None:
                     report.failed[s.ticker] = "deferred: rate-limit pauses used up" if fx.exhausted else "fetch failed after retries"
                     continue
-                raw = _clip(frame, y, s.ticker, last)
+                raw = _clip(frame, y, s.ticker, last, cfg["fetch"].get("historyStart", ""))
                 valid, rej = _validated(fx, cal, cfg, s, raw, last)
                 if len(rej):
                     report.rejects.append(rej)

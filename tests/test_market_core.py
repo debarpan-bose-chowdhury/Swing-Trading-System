@@ -75,14 +75,20 @@ class ValidatorTests(Env):
         self.check(pd.concat([bars("A", ["2026-09-28"]), bars("B", ["2026-09-28"])]), None)
 
     def test_weekend_rejected(self):
-        self.check(bars("A", ["2026-09-26"]), "NON_TRADING_DAY")
+        self.check(bars("A", ["2026-09-26"], Volume=0), "NON_TRADING_DAY")
 
     def test_holiday_rejected_and_special_session_allowed(self):
         self.set_calendar(holidays=["2026-09-28"], special=["2026-09-26"])
         self.cal = Calendar(self.cfg["paths"]["calendar"])
-        valid, rej = validate(bars("A", ["2026-09-28", "2026-09-26"]), self.cal)
+        valid, rej = validate(bars("A", ["2026-09-28", "2026-09-26"], Volume=0), self.cal)
         self.assertEqual(list(rej.Date), ["2026-09-28"])
         self.assertEqual(list(valid.Date), ["2026-09-26"])
+
+    def test_bar_with_volume_on_a_non_trading_day_is_kept(self):
+        self.set_calendar(holidays=["2026-09-28"])
+        self.cal = Calendar(self.cfg["paths"]["calendar"])
+        valid, rej = validate(bars("A", ["2026-09-28", "2026-09-26"], Volume=5), self.cal)  # holiday and a Saturday
+        self.assertEqual((len(valid), len(rej)), (2, 0))
 
     def test_null_value_flagged(self):
         df = bars("A", ["2026-09-28", "2026-09-29"])
@@ -182,6 +188,26 @@ class CommonTests(Env):
         common.write_csv(pd.DataFrame({"a": [1]}), target)
         self.assertEqual([p.name for p in target.parent.iterdir()], ["f.csv"])
 
+    def test_atomic_retries_a_transiently_locked_destination(self):
+        target, real = self.root / "f.txt", common.os.replace
+        calls = []
+
+        def flaky(src, dst):
+            calls.append(src)
+            if len(calls) < 3:
+                raise PermissionError(13, "Access is denied")
+            real(src, dst)
+
+        with patch("app.market.common.os.replace", side_effect=flaky), patch("app.market.common.time.sleep"):
+            common.atomic(target, lambda tmp: tmp.write_text("ok"))
+        self.assertEqual((len(calls), target.read_text()), (3, "ok"))
+
+    def test_atomic_gives_up_when_the_destination_stays_locked(self):
+        with patch("app.market.common.os.replace", side_effect=PermissionError(13, "denied")) as rep, patch("app.market.common.time.sleep"):
+            with self.assertRaises(PermissionError):
+                common.atomic(self.root / "f.txt", lambda tmp: tmp.write_text("x"))
+        self.assertEqual(rep.call_count, common.REPLACE_ATTEMPTS)
+
     def test_report_status_and_summary(self):
         r = Report("updator")
         self.assertEqual(r.status(), "ok")
@@ -240,6 +266,15 @@ class CommonTests(Env):
         self.assertEqual(json.loads((self.market / "status.json").read_text())["status"], "failed")
         send.assert_called_once()
         self.assertFalse((self.market / ".lock").exists())
+
+    def test_run_stage_fails_fast_without_parquet_engine(self):
+        ran = MagicMock()
+        with patch.dict("sys.modules", {"pyarrow": None}):
+            send = self.run_stage(ran, 1)
+        ran.assert_not_called()
+        self.assertEqual(json.loads((self.market / "status.json").read_text())["status"], "failed")
+        send.assert_called_once()
+        self.assertIn("pyarrow is required", send.call_args.args[2])
 
     def test_run_stage_busy_exits_2_and_keeps_other_lock(self):
         self.market.mkdir(parents=True)
