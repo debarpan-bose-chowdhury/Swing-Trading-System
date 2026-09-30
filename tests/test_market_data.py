@@ -310,6 +310,12 @@ class IngestTests(Env):
         self.assertEqual(list(valid.Date), ["2026-09-28"])
         self.assertEqual(len(raw), 1)
 
+    def test_rows_before_the_history_floor_are_dropped(self):
+        self.cfg["fetch"]["historyStart"] = "2026-09-29"
+        self.yahoo_has("A.NS", NEW)
+        (_, valid, _, raw), = self.fetch([self.s])
+        self.assertEqual((list(raw.Date), list(valid.Date)), (["2026-09-29"], ["2026-09-29"]))
+
     def test_null_row_is_refetched_and_replaced(self):
         df = self.yahoo_has("A.NS", NEW)
         bad = df.copy()

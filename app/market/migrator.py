@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from app.market import registry
+from app.market import calendar_sync, registry
 from app.market.common import Report, atomic, iso, run_stage, shift
 from app.market.fetcher import Fetcher
 from app.market.ingest import backfill, build_series
@@ -26,6 +26,8 @@ def run(cfg: dict, now: datetime, log: logging.Logger, report: Report, fetcher: 
     registry.refresh(reg, registry.upstream_symbols(cfg))
     registry.save(reg, market / "registry.csv")
 
+    fetcher = fetcher or Fetcher(cfg, log)
+    calendar_sync.sync(cfg, fetcher, log, report, now.date(), full=True)
     cal = Calendar(cfg["paths"]["calendar"])
     end = iso(cal.last_final_session(now, cfg["fetch"]["sessionFinalAfterIST"]))
     report.last_trading_day = end
@@ -40,7 +42,7 @@ def run(cfg: dict, now: datetime, log: logging.Logger, report: Report, fetcher: 
 
     todo = [s for s in series if s.ticker not in done]
     log.info("Migrating %d of %d series (%d already checkpointed)", len(todo), len(series), len(done))
-    backfill(fetcher or Fetcher(cfg, log), cal, cfg, report, todo, end, on_done)
+    backfill(fetcher, cal, cfg, report, todo, end, on_done)
     if all(s.ticker in done for s in series):
         atomic(market / "migration.done", lambda tmp: tmp.write_text(now.isoformat(timespec="seconds"), encoding="utf-8"))
         log.info("Migration complete")

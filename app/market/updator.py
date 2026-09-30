@@ -8,7 +8,7 @@ from typing import NamedTuple
 import numpy as np
 import pandas as pd
 
-from app.market import registry
+from app.market import calendar_sync, registry
 from app.market.common import Report, iso, run_stage, shift
 from app.market.fetcher import Fetcher
 from app.market.ingest import backfill, build_series, fetch_valid, too_many_rejects
@@ -52,7 +52,9 @@ def actions(raw: pd.DataFrame, p: Plan) -> str | None:
 def run(cfg: dict, now: datetime, log: logging.Logger, report: Report, fetcher: Fetcher | None = None) -> None:
     market = Path(cfg["paths"]["market"])
     today = now.date()
-    cal, fx = Calendar(cfg["paths"]["calendar"]), fetcher or Fetcher(cfg, log)
+    fx = fetcher or Fetcher(cfg, log)
+    calendar_sync.sync(cfg, fx, log, report, today, full=False)
+    cal = Calendar(cfg["paths"]["calendar"])
     end = cal.last_final_session(now, cfg["fetch"]["sessionFinalAfterIST"])
     report.last_trading_day = iso(end)
 

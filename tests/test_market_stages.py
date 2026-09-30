@@ -140,7 +140,8 @@ class UpdatorTests(StageEnv):
 
     def test_weekend_row_from_yahoo_is_rejected(self):
         self.seed(days=weekdays("2026-08-31", "2026-09-22"))
-        self.yahoo_has("AAA.NS", weekdays("2026-08-31", "2026-09-29") + ["2026-09-26"])
+        data = self.yahoo_has("AAA.NS", weekdays("2026-08-31", "2026-09-29") + ["2026-09-26"])
+        data.loc[data.Date == "2026-09-26", "Volume"] = 0  # Yahoo's flat filler bar
         self.run_stage(updator)
         self.assertEqual(list(self.report.rejected().Reason), ["NON_TRADING_DAY"])
 
