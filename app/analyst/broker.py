@@ -138,6 +138,8 @@ class Broker:
         raise LoginFailed("broker login failed: invalid TOTP")
 
     def logout(self) -> None:
+        if not self.jwt:
+            return
         try:
             self._once("logout", {"clientcode": self.secrets["ANGEL_CLIENT_CODE"]})
         except Exception:  # best effort; the session ends at midnight anyway

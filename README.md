@@ -2,7 +2,7 @@
 
 A Python 3.12+ service for the swing-trading system. The current implementation
 provides an HTTPS health endpoint, an NSE ticker-metadata pipeline, the Ticker Data System (OHLCV price history) and
-the Stock Analyst (weekly target list; the broker Ledger is still to come).
+the Stock Analyst (broker ledger, trading journal and weekly target list).
 
 ## Development
 
@@ -152,11 +152,13 @@ four months selected). The 2nd never coincides with the upstream Cleaner on the 
 
 Design: `app/doc/Stock_Analyst_TDD.md` (read its "As-built decisions" first). It reads the Ticker Data prices, the
 Metadata bucket files and the Ledger's book, and writes `app/data/analyst/targets/targets_{rebalance_date}.json` for the
-Risk Manager. It places no orders. Phase 1 (Signals) is built; the Ledger and the broker probe come next.
+Risk Manager. It places no orders. Stages: Ledger (broker -> fills, book, journal), Signals (targets) and the broker Probe.
 
 | Stage | Command | When | What it does |
 |---|---|---|---|
 | Signals | `python -m app.analyst.signals` | Friday 21:30 IST, repeated hourly until Sunday 22:00 | Gate (Ticker Data `status.json` ok/partial for the rebalance date, no `market/.lock`, index row present, holidays loaded, `placeholders` false), regime from the `^NSEI` close (SMA50/SMA200/ROC63, weekly persistence, BEAR immediate), per-bucket selection (liquidity, full-window trend MA, momentum, BEAR composite ranking), delta against `ledger/book.csv` (KEEP/ADD/DROP, omitted when the book is missing or older than 3 days), cost estimates, target file |
+| Ledger | `python -m app.analyst.ledger` | Mon-Fri 16:30 IST, hourly retry until 20:30 | Logs in to Angel One (client code, MPIN, TOTP from the env-file), snapshots tradebook / positions / holdings / funds, appends today's NSE DELIVERY fills of tracked tickers to `ledger/fills.csv`, replays the open-position book `ledger/book.csv` (average cost) and appends closed sales to `trading_journal.csv` (P&L, estimated charges). Reconciles against holdings: corporate action (within 1% of cost), missed buy, missed sell (ESTIMATED journal row you correct later). Seeds from `seed_positions.csv` on the first run, then keeps 30-day backups and purges snapshots after 90 days. Skips non-trading days and a day that already succeeded |
+| Probe | `python -m app.analyst.probe --check-broker` | Manual, before go-live and after any Angel One change | Logs in and prints the field names and value types (never values) each read endpoint returns, and flags missing expected fields |
 | Replay | `python -m app.analyst.signals --as-of 2026-09-25` | Manual | Read-only: prints the target JSON for that rebalance date and writes nothing |
 
 Every stage accepts `--check` (config and imports only). Exit codes: 0 ok, 1 failed, 2 busy (run lock), 3 gate not met
@@ -179,8 +181,16 @@ docker run --rm `
   ghcr.io/debarpan-bose-chowdhury/swing-trading-analyst:latest python -m app.analyst.signals
 ```
 
-Signals only needs the SMTP variables; a value still written as `<set at deployment>` counts as unset. The Task Scheduler
-trigger is Friday 21:30 repeated every 60 minutes for 48.5 hours, without starting a new instance while one runs.
+Signals only needs the SMTP variables; the Ledger and Probe also need the four `ANGEL_*` ones. A value still written as
+`<set at deployment>` counts as unset. Task Scheduler triggers: Signals Friday 21:30 repeated every 60 minutes for 48.5
+hours; Ledger Monday-Friday 16:30 repeated every 60 minutes for 4 hours; neither starts a new instance while one runs.
+
+**Ledger go-live checklist:** create a SmartAPI key, fill the env-file, run the Probe and fix `broker.EXPECTED` / the
+parsers if any field differs (and set `ledger.observedQtyFields` per what `t1quantity` means), fill
+`app/config/seed_positions.csv` from your contract notes (`ticker,qty,entry_date,entry_price`), then schedule the Ledger.
+The tradebook only holds the current day, so a day the Ledger misses is recovered by reconciliation as ESTIMATED
+journal rows that you correct (edit the entry/exit fields; the next run recalculates and marks the row MANUAL_VERIFIED).
+The backups sit on the same disk as the data: also back up the host folder elsewhere.
 
 ## Container
 
@@ -215,7 +225,7 @@ retries.
 - `app/__main__.py`: HTTPS server and `/health` endpoint.
 - `app/metadata/`: ticker-metadata pipeline (`data_source`, `filter`, `cleaner`, `notifier`, shared `common`).
 - `app/market/`: Ticker Data System (`migrator`, `updator`, `archiver`; shared `validator`, `fetcher`, `store`, `registry`, `ingest`, `tradingcal`, `mailer`, `common`).
-- `app/analyst/`: Stock Analyst (`signals`, `regime`, `selector`, `costs`, `secrets`, shared `common`); the Ledger and probe are phase 2.
+- `app/analyst/`: Stock Analyst (`ledger`, `journal`, `broker`, `probe`, `signals`, `regime`, `selector`, `costs`, `secrets`, shared `common`).
 - `app/config/`: `config.json` (metadata pipeline), `market.json`, `indices.json`, `nse_calendar.json` (market stages), `analyst.json`, `seed_positions.csv` (analyst).
 - `app/data/`: pipeline output (`raw/`, `storage/`, `market/`, `logs/`, `health.json`); git-ignored.
 - `tests/`: unit tests for the HTTP service, the metadata pipeline and the market stages (Yahoo is always faked).

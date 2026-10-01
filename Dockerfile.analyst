@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
-# Stock Analyst (signals; the ledger and probe join in phase 2). Separate from the other images because it will need
-# broker libraries. Stages run by overriding the command, e.g. `python -m app.analyst.signals`.
+# Stock Analyst (ledger, signals, probe). Separate from the other images so the batch images stay independent.
+# Stages run by overriding the command, e.g. `python -m app.analyst.ledger`; pure Python (requests, pandas) like the market image.
 FROM python:3.12-slim
 
 LABEL org.opencontainers.image.source="https://github.com/debarpan-bose-chowdhury/Swing-Trading-System"
