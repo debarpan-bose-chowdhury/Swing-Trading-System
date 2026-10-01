@@ -63,6 +63,15 @@ def validate(cfg: dict) -> None:
         raise ValueError("rebalance: only weekly and monday_open are supported")
     if not _num(cfg["capital"]["floatingCapitalInr"]):
         raise ValueError("capital.floatingCapitalInr must be a number of 0 or more")
+    sel = cfg["selector"]
+    if sel["maxStaleTradingDays"] != 0:
+        raise ValueError("selector.maxStaleTradingDays: only 0 is supported (a ticker needs a row on the rebalance date)")
+    if not _int(sel["momentumSkipDays"], 0):
+        raise ValueError("selector.momentumSkipDays must be an integer of 0 or more")
+    if not (_int(sel["liquidity"]["windowDays"], 1) and _num(sel["liquidity"]["minAdvCr"]) and sel["liquidity"]["statistic"] in ("median", "mean")):
+        raise ValueError("selector.liquidity: windowDays >= 1, minAdvCr >= 0, statistic median or mean")
+    if set(sel["bearScore"]) != {"mom20", "mom63", "hit20", "vol20", "dd63"} or not all(_num(v, -1e9) for v in sel["bearScore"].values()):
+        raise ValueError("selector.bearScore needs numeric weights for mom20, mom63, hit20, vol20, dd63")
     bad = [k for k, v in _leaves(cfg["costs"]) if not _num(v)]
     if bad:
         raise ValueError(f"costs must be numbers of 0 or more: {bad}")
