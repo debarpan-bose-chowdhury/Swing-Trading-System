@@ -7,7 +7,6 @@ confirms them against the real account. Secrets, tokens and TOTP codes are never
 """
 
 import base64
-import hashlib
 import hmac
 import json
 import logging
@@ -53,7 +52,7 @@ class LoginFailed(Exception):
 def totp(secret: str, now: float | None = None, digits: int = 6, step: int = 30) -> str:
     """RFC 6238 time-based one-time password (HMAC-SHA1), from a base32 secret."""
     key = base64.b32decode(secret.replace(" ", "").upper() + "=" * (-len(secret.replace(" ", "")) % 8))
-    digest = hmac.new(key, struct.pack(">Q", int((time.time() if now is None else now) // step)), hashlib.sha1).digest()
+    digest = hmac.new(key, struct.pack(">Q", int((time.time() if now is None else now) // step)), "sha1").digest()  # NOSONAR: HMAC-SHA1 is what RFC 6238 and authenticator apps require
     offset = digest[-1] & 0x0F
     return str((struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF) % 10**digits).zfill(digits)
 
@@ -103,12 +102,12 @@ class Broker:
             except BrokerError as e:
                 if e.code in TOKEN_ERRORS and not self.relogged and route != "login":
                     self.relogged = True
-                    self.log.warning("%s: %s; logging in again once", route, e.code)
+                    self.log.warning("%s: %r; logging in again once", route, e.code)
                     self.login()
                     continue
                 if e.code not in RETRYABLE | {"RATE_LIMITED"} or attempt >= self.c["maxRetries"]:
                     raise
-                self.log.warning("%s: %s; retry %d", route, e.code, attempt + 1)
+                self.log.warning("%s: %r; retry %d", route, e.code, attempt + 1)
             except requests.RequestException as e:
                 if attempt >= self.c["maxRetries"]:
                     raise BrokerError(type(e).__name__, route) from None

@@ -58,7 +58,7 @@ def parse_tradebook(rows: list[dict], run_date: str, run_id: str, known, ignore:
             untracked.add(str(r["tradingsymbol"]))
             continue
         qty, price, when = int(float(r["fillsize"])), float(r["fillprice"]), str(r["filltime"] or "")
-        key = str(r["fillid"] or "") or hashlib.sha1(f"{r['orderid']}|{when}|{qty}|{price}".encode()).hexdigest()
+        key = str(r["fillid"] or "") or hashlib.sha256(f"{r['orderid']}|{when}|{qty}|{price}".encode()).hexdigest()
         fills.append({"fill_key": f"{run_date}-{key}", "trade_date": run_date, "ticker": ticker, "broker_symbol": r["tradingsymbol"],
                       "side": str(r["transactiontype"]).upper(), "qty": qty, "price": price,
                       "fill_time": f"{run_date}T{when}+05:30" if len(when) == 8 else "", "order_id": str(r["orderid"] or ""),
@@ -259,7 +259,7 @@ def run(cfg: dict, now: datetime, log: logging.Logger, report: Report, args, bro
                 fetched[name] = getattr(broker, name)()
             except BrokerError as e:
                 failed.append(f"{name} ({e.code})")
-                log.warning("%s fetch failed: %s", name, e.code)
+                log.warning("%s fetch failed: %r", name, e.code)
                 continue
             snap = {"fetchedAt": now.isoformat(timespec="seconds"), "endpoint": name, "rows": fetched[name]}
             atomic(analyst / "snapshots" / f"{name}_{today}.json", lambda tmp, s=snap: tmp.write_text(json.dumps(s), encoding="utf-8"))

@@ -18,7 +18,7 @@ HASHED = ["qty", "entry_date", "entry_price", "exit_date", "exit_price", "pl", "
 
 
 def auto_hash(row) -> str:
-    return hashlib.sha1("|".join(str(row[c]) for c in HASHED).encode()).hexdigest()[:16]
+    return hashlib.sha256("|".join(str(row[c]) for c in HASHED).encode()).hexdigest()[:16]
 
 
 def derived(qty: float, entry: float, exit_: float, c: dict) -> dict:

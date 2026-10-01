@@ -404,7 +404,7 @@ class SeedAndParseTests(Env):
         row = tb("AAA-EQ", "BUY", 1, 10, "")
         fills, _, skipped = ledger.parse_tradebook([row, tb("AAA-EQ", "BUY", 1, 10, "7", producttype="INTRADAY")], MON, "r", {"AAA"}, set())
         self.assertEqual((len(fills), skipped), (1, 1))
-        self.assertRegex(fills[0]["fill_key"], rf"^{MON}-[0-9a-f]{{40}}$")
+        self.assertRegex(fills[0]["fill_key"], rf"^{MON}-[0-9a-f]{{64}}$")
         self.assertEqual(fills[0]["fill_time"], f"{MON}T10:00:00+05:30")
         again, _, _ = ledger.parse_tradebook([row], MON, "r", {"AAA"}, set())
         self.assertEqual(fills[0]["fill_key"], again[0]["fill_key"])
