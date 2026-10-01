@@ -683,6 +683,7 @@ source = { editable = "." }
 dependencies = [
     { name = "pandas" },
     { name = "pyarrow" },
+    { name = "requests" },
     { name = "yfinance" },
 ]
 
@@ -690,6 +691,7 @@ dependencies = [
 requires-dist = [
     { name = "pandas", specifier = ">=3.0" },
     { name = "pyarrow", specifier = ">=20" },
+    { name = "requests", specifier = ">=2.31" },
     { name = "yfinance", specifier = ">=1.7" },
 ]
 
