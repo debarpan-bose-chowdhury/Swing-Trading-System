@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import time
 from contextlib import contextmanager
@@ -16,6 +17,17 @@ from app.market.tradingcal import Calendar
 
 CONFIG_PATH = "app/config/analyst.json"
 REGIMES = ("BULL", "TREND", "WEAK", "BEAR")
+
+
+SERIES_SUFFIX = re.compile(r"-[A-Z]{2}$")  # Angel One trading symbols carry the series, e.g. TATASTEEL-EQ
+
+
+def tracked_symbol(tradingsymbol: str, known) -> str | None:
+    """NSE symbol the Ticker Data registry knows for a broker trading symbol, None when it is not tracked."""
+    if tradingsymbol in known:
+        return tradingsymbol
+    stripped = SERIES_SUFFIX.sub("", tradingsymbol)
+    return stripped if stripped in known else None
 
 
 class Gate(Exception):

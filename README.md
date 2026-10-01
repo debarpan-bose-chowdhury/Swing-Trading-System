@@ -1,7 +1,8 @@
 # Swing-Trading-System
 
 A Python 3.12+ service for the swing-trading system. The current implementation
-provides an HTTPS health endpoint, an NSE ticker-metadata pipeline and the Ticker Data System (OHLCV price history).
+provides an HTTPS health endpoint, an NSE ticker-metadata pipeline, the Ticker Data System (OHLCV price history) and
+the Stock Analyst (weekly target list; the broker Ledger is still to come).
 
 ## Development
 
@@ -147,10 +148,45 @@ image) runs daily at 21:00 IST, after the upstream Data Source/Filter/Notifier; 
 Jan/Apr/Jul/Oct (Task Scheduler has no single "2nd of these months" trigger; use one monthly trigger on day 2 with those
 four months selected). The 2nd never coincides with the upstream Cleaner on the 1st.
 
+### Stock Analyst (weekly targets)
+
+Design: `app/doc/Stock_Analyst_TDD.md` (read its "As-built decisions" first). It reads the Ticker Data prices, the
+Metadata bucket files and the Ledger's book, and writes `app/data/analyst/targets/targets_{rebalance_date}.json` for the
+Risk Manager. It places no orders. Phase 1 (Signals) is built; the Ledger and the broker probe come next.
+
+| Stage | Command | When | What it does |
+|---|---|---|---|
+| Signals | `python -m app.analyst.signals` | Friday 21:30 IST, repeated hourly until Sunday 22:00 | Gate (Ticker Data `status.json` ok/partial for the rebalance date, no `market/.lock`, index row present, holidays loaded, `placeholders` false), regime from the `^NSEI` close (SMA50/SMA200/ROC63, weekly persistence, BEAR immediate), per-bucket selection (liquidity, full-window trend MA, momentum, BEAR composite ranking), delta against `ledger/book.csv` (KEEP/ADD/DROP, omitted when the book is missing or older than 3 days), cost estimates, target file |
+| Replay | `python -m app.analyst.signals --as-of 2026-09-25` | Manual | Read-only: prints the target JSON for that rebalance date and writes nothing |
+
+Every stage accepts `--check` (config and imports only). Exit codes: 0 ok, 1 failed, 2 busy (run lock), 3 gate not met
+(the hourly retry tries again; no email until the final Sunday attempt). A target file is never edited; a rerun for the
+same date is a no-op unless `--force`, which renames the old file `targets_{date}.superseded_{time}.json`.
+
+Configuration: `app/config/analyst.json`. It ships with the strategy repository's numbers and `"placeholders": true`, which
+makes Signals refuse to run: confirm the strategy values, composition and floating capital, then set it to `false`.
+`app/config/seed_positions.csv` (header only) is for the Ledger.
+
+**Secrets** (Angel One and SMTP) are environment variables, never files in the repo, data or config folders. Copy
+`.env.example` to `C:\ProgramData\ticker-pipeline\secrets\analyst.env` (outside the mounted folders), fill it in and
+restrict it to your Windows user. `.env` and `*.env` are git- and docker-ignored. Task Scheduler passes the file:
+
+```powershell
+docker run --rm `
+  -v C:\ProgramData\ticker-pipeline\data:/app/app/data `
+  -v C:\ProgramData\ticker-pipeline\config:/app/app/config `
+  --env-file C:\ProgramData\ticker-pipeline\secrets\analyst.env `
+  ghcr.io/debarpan-bose-chowdhury/swing-trading-analyst:latest python -m app.analyst.signals
+```
+
+Signals only needs the SMTP variables; a value still written as `<set at deployment>` counts as unset. The Task Scheduler
+trigger is Friday 21:30 repeated every 60 minutes for 48.5 hours, without starting a new instance while one runs.
+
 ## Container
 
 `Dockerfile` builds the HTTPS service image; `Dockerfile.market` builds the Ticker Data System image (adds
-`yfinance`, `pandas`, `pyarrow`; default command `python -m app.market.updator`). The service image starts the HTTPS service. Mount a directory containing `cert.pem` and
+`yfinance`, `pandas`, `pyarrow`; default command `python -m app.market.updator`); `Dockerfile.analyst` builds the Stock Analyst
+image (default command `python -m app.analyst.signals`). The service image starts the HTTPS service. Mount a directory containing `cert.pem` and
 `key.pem`, and pass their paths into the container:
 
 ```bash
@@ -179,7 +215,8 @@ retries.
 - `app/__main__.py`: HTTPS server and `/health` endpoint.
 - `app/metadata/`: ticker-metadata pipeline (`data_source`, `filter`, `cleaner`, `notifier`, shared `common`).
 - `app/market/`: Ticker Data System (`migrator`, `updator`, `archiver`; shared `validator`, `fetcher`, `store`, `registry`, `ingest`, `tradingcal`, `mailer`, `common`).
-- `app/config/`: `config.json` (metadata pipeline), `market.json`, `indices.json`, `nse_calendar.json` (market stages).
+- `app/analyst/`: Stock Analyst (`signals`, `regime`, `selector`, `costs`, `secrets`, shared `common`); the Ledger and probe are phase 2.
+- `app/config/`: `config.json` (metadata pipeline), `market.json`, `indices.json`, `nse_calendar.json` (market stages), `analyst.json`, `seed_positions.csv` (analyst).
 - `app/data/`: pipeline output (`raw/`, `storage/`, `market/`, `logs/`, `health.json`); git-ignored.
 - `tests/`: unit tests for the HTTP service, the metadata pipeline and the market stages (Yahoo is always faked).
 
@@ -199,6 +236,7 @@ Two images are built in one `build-docker` job (an `images` list passed to the s
 |---|---|---|---|
 | `swing-trading-system` | `Dockerfile` | `service` | build, staging deploy, DAST, production deploy |
 | `swing-trading-market` | `Dockerfile.market` | `batch` | build, smoke-run, weekly scan (runs from Windows Task Scheduler, never deployed) |
+| `swing-trading-analyst` | `Dockerfile.analyst` | `batch` | same as the market image (smoke-run `python -m app.analyst.signals --check`) |
 
 - **Smoke-run:** after the push, CI runs `docker run <market image> python -m app.market.updator --check`. `--check`
   (available on every market and metadata stage) loads the config (and the trading calendar), proves the dependencies
@@ -206,7 +244,7 @@ Two images are built in one `build-docker` job (an `images` list passed to the s
   logs or lock files.
 - **Compose:** the deploy exports `IMAGE_REF_SWING_TRADING_SYSTEM` (name upper-cased, `-` becomes `_`); the compose files
   read it and fall back to `IMAGE_REF`, then `:latest`.
-- **Scan:** `image-scan.yml` scans both images weekly (Mondays 03:17 UTC) and on demand (`workflow_dispatch`).
+- **Scan:** `image-scan.yml` scans the images weekly (Mondays 03:17 UTC) and on demand (`workflow_dispatch`).
 - **Adding an image:** add an entry (`name`, `language`, `dockerfile`, `role`, ...) to `images` in `ci-cd.yml`; for a
   service also give it a compose service using `IMAGE_REF_<NAME>` and a `health-url`. See the CI-CD README section
   "Multi-image pipelines".
