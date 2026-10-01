@@ -1,0 +1,85 @@
+{
+  "placeholders": true,
+  "broker": {
+    "name": "AngelOne",
+    "timeoutSeconds": 15,
+    "minCallGapSeconds": 1.0,
+    "maxRetries": 3,
+    "backoffSeconds": [2, 4, 8],
+    "loginAttempts": 3,
+    "loginRetryGapSeconds": 60
+  },
+  "capital": { "floatingCapitalInr": 0, "ignoreSymbols": [] },
+  "limits": { "maxPositionDrawdownPct": 0.17, "maxPortfolioDrawdownPct": 0.5 },
+  "composition": { "LargeCap": 0.5, "MidCap": 0.3, "SmallCap": 0.2 },
+  "rebalance": { "schedule": "weekly", "execution": "monday_open" },
+  "regime": { "index": "^NSEI", "persistenceWeeks": 2, "minRows": 210 },
+  "strategies": {
+    "BULL": {
+      "LargeCap": { "top_n": 10, "lookback": 126, "stock_trend_ma": 100 },
+      "MidCap": { "top_n": 10, "lookback": 126, "stock_trend_ma": 100 },
+      "SmallCap": { "top_n": 10, "lookback": 126, "stock_trend_ma": 100 }
+    },
+    "TREND": {
+      "LargeCap": { "top_n": 5, "lookback": 63, "stock_trend_ma": 50 },
+      "MidCap": { "top_n": 5, "lookback": 63, "stock_trend_ma": 50 },
+      "SmallCap": { "top_n": 5, "lookback": 63, "stock_trend_ma": 50 }
+    },
+    "WEAK": {
+      "LargeCap": { "top_n": 0, "lookback": 63, "stock_trend_ma": 50 },
+      "MidCap": { "top_n": 0, "lookback": 63, "stock_trend_ma": 50 },
+      "SmallCap": { "top_n": 0, "lookback": 63, "stock_trend_ma": 50 }
+    },
+    "BEAR": {
+      "LargeCap": { "top_n": 0, "lookback": 63, "stock_trend_ma": 50 },
+      "MidCap": { "top_n": 0, "lookback": 63, "stock_trend_ma": 50 },
+      "SmallCap": { "top_n": 0, "lookback": 63, "stock_trend_ma": 50 }
+    }
+  },
+  "selector": { "maxStaleTradingDays": 0, "maxBucketFileAgeDays": 7, "maxMissingShare": 0.10 },
+  "ledger": {
+    "runTime": "16:30",
+    "retryEveryMinutes": 60,
+    "retryUntil": "20:30",
+    "snapshotRetentionDays": 90,
+    "backupRetentionDays": 30,
+    "corpActionCostTolerance": 0.01
+  },
+  "signals": {
+    "runTime": "21:30",
+    "retryEveryMinutes": 60,
+    "retryUntil": "Sun 22:00",
+    "maxHoldingsSnapshotAgeDays": 3,
+    "targetsRetentionWeeks": 104
+  },
+  "costs": {
+    "asOf": "2026-09-30",
+    "brokerage": { "flatInr": 20, "pct": 0.001, "minInr": 5 },
+    "sttPct": 0.001,
+    "nseTxnPct": 0.000030699,
+    "ipftPct": 0.000000001,
+    "sebiPct": 0.000001,
+    "stampBuyPct": 0.00015,
+    "gstPct": 0.18,
+    "dpSellInr": 20,
+    "dpGstPct": 0.18,
+    "slippageBpsPerSide": { "LargeCap": 10, "MidCap": 25, "SmallCap": 50 },
+    "minTradeNotionalInr": 20000
+  },
+  "paths": {
+    "analyst": "app/data/analyst",
+    "market": "app/data/market",
+    "upstreamStorage": "app/data/storage",
+    "metadataConfig": "app/config/config.json",
+    "calendar": "app/config/nse_calendar.json",
+    "seed": "app/config/seed_positions.csv",
+    "logs": "app/data/logs"
+  },
+  "lock": { "staleAfterHours": 6 },
+  "mail": {
+    "smtpHost": "<set at deployment>",
+    "smtpPort": 587,
+    "sender": "<set at deployment>",
+    "recipients": ["<set at deployment>"]
+  }
+}
