@@ -57,7 +57,9 @@ def _bear_order(hist: pd.DataFrame, weights: dict) -> tuple[pd.Series, int]:
     """Composite defensive score per ticker, best first (momentum-confirmed names ahead of the rest), plus the
     number of tickers without the full 70-row history."""
     p = hist.tail(BEAR_ROWS)
-    scorable = p.columns[p.notna().all()] if len(p) >= BEAR_ROWS else p.columns[:0]
+    if len(p) < BEAR_ROWS:
+        return pd.Series(dtype=float), len(hist.columns)
+    scorable = p.columns[p.notna().all()]
     p = p[scorable]
     last = p.iloc[-1]
     mom20, mom63 = last / p.iloc[-21] - 1, last / p.iloc[-64] - 1

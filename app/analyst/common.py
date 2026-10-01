@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
-from app.market.common import IST, Busy, atomic, iso, safe_path
+from app.market.common import IST, Busy, atomic, iso, require_parquet_engine, safe_path
 from app.market.tradingcal import Calendar
 
 CONFIG_PATH = "app/config/analyst.json"
@@ -84,6 +84,15 @@ def validate(cfg: dict) -> None:
         raise ValueError("selector.liquidity: windowDays >= 1, minAdvCr >= 0, statistic median or mean")
     if set(sel["bearScore"]) != {"mom20", "mom63", "hit20", "vol20", "dd63"} or not all(_num(v, -1e9) for v in sel["bearScore"].values()):
         raise ValueError("selector.bearScore needs numeric weights for mom20, mom63, hit20, vol20, dd63")
+    if not (_num(sel["maxMissingShare"]) and sel["maxMissingShare"] <= 1 and _int(sel["maxBucketFileAgeDays"], 0)):
+        raise ValueError("selector: maxMissingShare must be 0..1 and maxBucketFileAgeDays an integer of 0 or more")
+    if not _int(cfg["regime"]["minRows"], 1):
+        raise ValueError("regime.minRows must be an integer of 1 or more")
+    sig = cfg["signals"]
+    if not (_int(sig["retryEveryMinutes"], 1) and _int(sig["maxHoldingsSnapshotAgeDays"], 0) and _int(sig["targetsRetentionWeeks"], 1)):
+        raise ValueError("signals: retryEveryMinutes >= 1, maxHoldingsSnapshotAgeDays >= 0, targetsRetentionWeeks >= 1 must be integers")
+    if not re.fullmatch(r"(?:\w{3} )?\d{2}:\d{2}", str(sig["retryUntil"])):
+        raise ValueError("signals.retryUntil must look like 'Sun 22:00' or '22:00'")
     bad = [k for k, v in _leaves(cfg["costs"]) if not _num(v)]
     if bad:
         raise ValueError(f"costs must be numbers of 0 or more: {bad}")
@@ -199,6 +208,7 @@ def run_stage(stage: str, run, argv: list[str] | None = None, extra_args=None) -
     try:
         with run_lock(cfg, log):
             try:
+                require_parquet_engine()  # price archives are Parquet; fail fast, before any work
                 run(cfg, now, log, report, args)
             except Gate as g:
                 log.warning("gate not met: %s", g)

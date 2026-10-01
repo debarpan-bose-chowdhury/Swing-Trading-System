@@ -9,7 +9,7 @@ import pandas as pd
 from app.market.store import Store
 from app.market.tradingcal import Calendar
 
-UNKNOWN_ROWS = 209  # the first 209 observations have no 200-day average yet
+UNKNOWN_ROWS = 209  # the original rule: with fewer than 210 observations the regime is Unknown (kept as is)
 HISTORY_COLS = ["date", "raw_regime", "active_regime", "pending_regime", "pending_remaining_days"]
 
 

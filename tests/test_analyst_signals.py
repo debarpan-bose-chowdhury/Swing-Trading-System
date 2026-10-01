@@ -165,6 +165,12 @@ class TargetsTests(Env):
         d = self.targets()["delta"]["drop"][0]
         self.assertEqual((d["ticker"], d["bucket"], d["reason"]), ("ORPHAN", None, "NOT_SELECTED"))
 
+    def test_stale_holdings_snapshot_omits_delta_even_with_a_fresh_ledger_date(self):
+        self.ledger([("FAST", 10, 300.0)], {"FAST": 320.0})
+        (self.analyst / "snapshots/holdings_2026-09-25.json").rename(self.analyst / "snapshots/holdings_2026-09-10.json")
+        self.run_signals()
+        self.assertFalse(self.targets()["delta"]["available"])
+
     def test_stale_ledger_omits_delta(self):
         self.ledger([("FAST", 10, 300.0)], {"FAST": 320.0}, good="2026-09-20")
         report = self.run_signals()
@@ -217,7 +223,7 @@ class GateTests(Env):
         with self.assertRaisesRegex(Gate, "in progress"):
             self.run_signals()
         (self.market / ".lock").unlink()
-        for status in ({"status": "failed"}, {"lastTradingDay": "2026-09-24"}, {"lastTradingDay": None, "stage": "archiver"}):
+        for status in ({"status": "failed"}, {"lastTradingDay": "2026-09-24"}):
             self.market_status(**status)
             with self.assertRaises(Gate):
                 self.run_signals()
@@ -225,10 +231,40 @@ class GateTests(Env):
         with self.assertRaises(Gate):
             self.run_signals()
 
-    def test_partial_market_status_and_any_stage_name_pass(self):
-        self.market_status(status="partial", stage="archiver")
+    def test_partial_status_and_an_archiver_status_without_a_trading_day_pass(self):
+        for status in ({"status": "partial"}, {"stage": "archiver", "lastTradingDay": None}):
+            self.market_status(**status)
+            self.run_signals(force=True)
+            self.assertTrue((self.analyst / "targets" / f"targets_{FRIDAY}.json").exists())
+
+    def test_archiver_status_does_not_hide_missing_data(self):
+        self.market_status(stage="archiver", lastTradingDay=None)
+        for f in (self.market / "indices/fresh").glob("*.csv"):
+            f.unlink()
+        self.index(self.days[:-1])
+        with self.assertRaisesRegex(Gate, "no row"):
+            self.run_signals()
+
+    def test_stale_file_of_an_unused_bucket_does_not_fail_the_run(self):
+        (self.root / f"data/storage/LargeCap_{FRIDAY}.csv").rename(self.root / "data/storage/LargeCap_2026-01-02.csv")
         self.run_signals()
         self.assertTrue((self.analyst / "targets" / f"targets_{FRIDAY}.json").exists())
+        self.cfg["composition"] = {"LargeCap": 0.5, "MidCap": 0, "SmallCap": 0.5}
+        with self.assertRaisesRegex(ValueError, "older than"):
+            self.run_signals(force=True)
+
+    def test_bear_with_short_windows_counts_unscorable_tickers_instead_of_crashing(self):
+        df = rows("^NSEI", self.days, 10000, -10)
+        self.idx_store.upsert("NSEI", df)
+        for regime_ in self.cfg["strategies"].values():
+            regime_["SmallCap"].update(lookback=20, stock_trend_ma=20)
+        self.small_cap({"FAST": (3.0, 1e7, FRIDAY)})
+        for f in (self.market / "fresh").glob("*.csv"):
+            f.unlink()
+        self.store.upsert("FAST", rows("FAST", self.days[-40:], 100, 3.0))  # 40 rows: enough for MA 20, short of 70
+        self.run_signals()
+        t = self.targets()["buckets"]["SmallCap"]
+        self.assertEqual((t["selected"], t["excluded"]["insufficientHistory"]), ([], 1))
 
     def test_missing_index_row_for_the_rebalance_date_is_a_gate(self):
         for f in (self.market / "indices/fresh").glob("*.csv"):
@@ -280,6 +316,17 @@ class RerunAndReplayTests(Env):
         self.assertTrue(report.quiet)
         self.assertEqual(json.loads(out.getvalue())["rebalanceDate"], FRIDAY)
         self.assertFalse(self.analyst.exists())
+
+    def test_replay_rejects_a_bad_or_too_early_date(self):
+        with self.assertRaises(ValueError):
+            self.run_signals(as_of="26-09-2026")
+        with self.assertRaisesRegex(ValueError, "before the first rebalance"):
+            self.run_signals(as_of="2000-01-01")
+
+    def test_force_never_overwrites_a_previous_superseded_copy(self):
+        for _ in range(3):
+            self.run_signals(force=True)
+        self.assertEqual(len(list((self.analyst / "targets").glob("targets_*.superseded_*.json"))), 2)
 
     def test_replay_gives_the_same_regime_as_the_live_run(self):
         import contextlib

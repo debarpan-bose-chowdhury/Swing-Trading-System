@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import shutil
 import sys
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -56,7 +57,9 @@ def check_gate(cfg: dict, cal: Calendar, rebalance: str) -> None:
     if (market / ".lock").exists():
         raise Gate("a Ticker Data run is in progress")
     status = read_json(market / "status.json")
-    if not status or status.get("status") not in ("ok", "partial") or status.get("lastTradingDay") != rebalance:
+    last = (status or {}).get("lastTradingDay")
+    # The Archiver also writes this file (without a lastTradingDay); the index-row and missing-share checks then decide.
+    if not status or status.get("status") not in ("ok", "partial") or (last is not None and last != rebalance):
         raise Gate(f"Ticker Data has not finished {rebalance}: {status and {k: status.get(k) for k in ('stage', 'status', 'lastTradingDay')}}")
 
 
@@ -67,20 +70,22 @@ def load_holdings(cfg: dict, now: datetime, known) -> dict:
     good = (status.get("ledger") or {}).get("lastGoodRunDate")
     book_path = analyst / "ledger" / "book.csv"
     book = pd.read_csv(book_path, dtype={"ticker": str}) if book_path.exists() else pd.DataFrame(columns=["ticker", "qty", "avg_price"])
-    ltp = {}
-    snaps = sorted((analyst / "snapshots").glob("holdings_*.json"))
-    for row in (read_json(snaps[-1]) or {}).get("rows", []) if snaps else []:
-        sym = tracked_symbol(str(row.get(HOLDING_SYMBOL, "")), known)
-        if sym and row.get(HOLDING_LTP):
-            ltp[sym] = float(row[HOLDING_LTP])
-    age_ok = good is not None and (now.date() - date.fromisoformat(good)).days <= cfg["signals"]["maxHoldingsSnapshotAgeDays"]
-    return {"book": book, "ltp": ltp, "asOf": good, "available": book_path.exists() and age_ok,
+    ltp, snap_day = {}, None
+    snaps = sorted((analyst / "snapshots").glob("holdings_*.json"))  # ISO dates in the names sort chronologically
+    if snaps:
+        snap_day = snaps[-1].stem.removeprefix("holdings_")
+        for row in (read_json(snaps[-1]) or {}).get("rows", []):
+            sym = tracked_symbol(str(row.get(HOLDING_SYMBOL, "")), known)
+            if sym and row.get(HOLDING_LTP):
+                ltp[sym] = float(row[HOLDING_LTP])
+    limit = cfg["signals"]["maxHoldingsSnapshotAgeDays"]
+    fresh = lambda day: day is not None and (now.date() - date.fromisoformat(day)).days <= limit  # noqa: E731
+    return {"book": book, "ltp": ltp, "asOf": good, "available": book_path.exists() and fresh(good) and fresh(snap_day),
             "untracked": (status.get("ledger") or {}).get("untracked", [])}
 
 
-def build_targets(cfg, cal, log, report, rebalance: str, history_row: pd.Series, now: datetime, holdings: dict | None) -> dict:
+def build_targets(cfg, cal, log, report, rebalance: str, history_row: pd.Series, now: datetime, holdings: dict | None, reg: pd.DataFrame) -> dict:
     market = Path(cfg["paths"]["market"])
-    reg = registry.load(market / "registry.csv")
     active = history_row.active_regime
     meta = json.loads(Path(cfg["paths"]["metadataConfig"]).read_text(encoding="utf-8"))
     store, rows = Store(market, cutoff=""), selector.rows_needed(cfg)
@@ -88,12 +93,19 @@ def build_targets(cfg, cal, log, report, rebalance: str, history_row: pd.Series,
 
     buckets, bucket_of = {}, {}
     for b in (x["name"] for x in meta["filter"]["capBuckets"]):
-        _, symbols = selector.bucket_universe(cfg, b, rebalance)
-        bucket_of.update({s: b for s in symbols})
         strategy = cfg["strategies"].get(active, {}).get(b)
+        selecting = bool(strategy and strategy["top_n"] > 0 and cfg["composition"].get(b, 0) > 0)
+        try:
+            _, symbols = selector.bucket_universe(cfg, b, rebalance)
+        except ValueError as e:
+            if selecting:
+                raise  # a bucket we select from must have a fresh universe
+            log.warning("%s: %s; its held tickers will show bucket null", b, e)
+            symbols = []
+        bucket_of.update({s: b for s in symbols})
         excluded = dict.fromkeys(EXCLUDED, 0)
         picks = []
-        if strategy and strategy["top_n"] > 0 and cfg["composition"].get(b, 0) > 0:
+        if selecting:
             known = [s for s in symbols if s in reg.index]
             live = [s for s in known if reg.at[s, "status"] == "active"]
             adj, value, no_data = selector.load_panel(store, live, rebalance, rows)
@@ -179,7 +191,10 @@ def write_targets(cfg: dict, targets: dict, now: datetime, force: bool) -> Path:
     if path.exists():
         if not force:
             raise FileExistsError(f"{path.name} already exists; use --force to supersede it")
-        path.replace(path.with_name(f"{path.stem}.superseded_{now.strftime('%H%M%S')}.json"))
+        old, n = path.with_name(f"{path.stem}.superseded_{now.strftime('%H%M%S')}.json"), 1
+        while old.exists():
+            old, n = path.with_name(f"{path.stem}.superseded_{now.strftime('%H%M%S')}_{n}.json"), n + 1
+        shutil.copy2(path, old)  # keep the original in place until the new file has replaced it
     atomic(path, lambda tmp: tmp.write_text(json.dumps(targets, indent=2), encoding="utf-8"))
     cutoff = iso(date.fromisoformat(targets["rebalanceDate"]) - timedelta(weeks=cfg["signals"]["targetsRetentionWeeks"]))
     for old in folder.glob("targets_*.json"):
@@ -192,6 +207,8 @@ def write_targets(cfg: dict, targets: dict, now: datetime, force: bool) -> Path:
 def run(cfg: dict, now: datetime, log: logging.Logger, report: Report, args) -> None:
     cal = Calendar(cfg["paths"]["calendar"])
     replay = args.as_of is not None
+    if replay:
+        date.fromisoformat(args.as_of)  # a malformed value fails here, not as a silent string comparison
     rebalance = None if replay else regime.live_rebalance_date(cal, now.date())
     if not replay and rebalance is None:
         log.info("No trading day this week; nothing to do")
@@ -208,13 +225,16 @@ def run(cfg: dict, now: datetime, log: logging.Logger, report: Report, args) -> 
         close = regime.index_close(cfg)
         history = regime.regime_history(close, cfg["regime"]["persistenceWeeks"])
         if replay:
-            rebalance = history.date[history.date <= args.as_of].max()
+            before = history.date[history.date <= args.as_of]
+            if before.empty:
+                raise ValueError(f"--as-of {args.as_of} is before the first rebalance date {history.date.iloc[0]}")
+            rebalance = before.max()
         elif rebalance not in set(history.date):
             raise Gate(f"the {cfg['regime']['index']} series has no row for {rebalance}")
         row = history[history.date == rebalance].iloc[0]
-        known = registry.load(Path(cfg["paths"]["market"]) / "registry.csv").index
-        holdings = None if replay else load_holdings(cfg, now, known)
-        targets = build_targets(cfg, cal, log, report, rebalance, row, now, holdings)
+        reg = registry.load(Path(cfg["paths"]["market"]) / "registry.csv")
+        holdings = None if replay else load_holdings(cfg, now, reg.index)
+        targets = build_targets(cfg, cal, log, report, rebalance, row, now, holdings, reg)
     except Gate as g:
         if replay or not is_last_attempt(now, cfg):
             raise

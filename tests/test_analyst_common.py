@@ -45,6 +45,18 @@ class ValidationTests(unittest.TestCase):
         self.bad(lambda c: c["strategies"]["BULL"]["MidCap"].update(top_n=-1))
         self.bad(lambda c: c["strategies"]["BULL"]["MidCap"].update(lookback=0))
 
+    def test_signals_selector_and_regime_numbers_are_checked_at_load(self):
+        self.bad(lambda c: c["selector"].update(maxMissingShare="0.1"))
+        self.bad(lambda c: c["selector"].update(maxMissingShare=1.5))
+        self.bad(lambda c: c["selector"].update(maxBucketFileAgeDays=-1))
+        self.bad(lambda c: c["selector"].update(maxStaleTradingDays=1))
+        self.bad(lambda c: c["selector"].update(momentumSkipDays=-1))
+        self.bad(lambda c: c["selector"]["liquidity"].update(statistic="max"))
+        self.bad(lambda c: c["selector"]["bearScore"].pop("dd63"))
+        self.bad(lambda c: c["regime"].update(minRows=0))
+        self.bad(lambda c: c["signals"].update(retryEveryMinutes=0))
+        self.bad(lambda c: c["signals"].update(retryUntil="Sunday 10pm"))
+
     def test_rebalance_capital_and_costs(self):
         self.bad(lambda c: c["rebalance"].update(schedule="daily"))
         self.bad(lambda c: c["capital"].update(floatingCapitalInr=-1))
