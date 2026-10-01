@@ -7,7 +7,10 @@
     "maxRetries": 3,
     "backoffSeconds": [2, 4, 8],
     "loginAttempts": 3,
-    "loginRetryGapSeconds": 60
+    "loginRetryGapSeconds": 60,
+    "clientLocalIp": "127.0.0.1",
+    "clientPublicIp": "127.0.0.1",
+    "clientMacAddress": "00:00:00:00:00:00"
   },
   "capital": { "floatingCapitalInr": 0, "ignoreSymbols": [] },
   "limits": { "maxPositionDrawdownPct": 0.17, "maxPortfolioDrawdownPct": 0.5 },
@@ -50,7 +53,8 @@
     "retryUntil": "20:30",
     "snapshotRetentionDays": 90,
     "backupRetentionDays": 30,
-    "corpActionCostTolerance": 0.01
+    "corpActionCostTolerance": 0.01,
+    "observedQtyFields": ["quantity"]
   },
   "signals": {
     "runTime": "21:30",
