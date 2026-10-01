@@ -7,3 +7,6 @@ tests
 build
 dist
 *.egg-info
+
+.env
+*.env
