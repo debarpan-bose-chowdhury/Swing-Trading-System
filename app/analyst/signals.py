@@ -100,7 +100,8 @@ def build_targets(cfg, cal, log, report, rebalance: str, history_row: pd.Series,
         except ValueError as e:
             if selecting:
                 raise  # a bucket we select from must have a fresh universe
-            log.warning("%r: %r; its held tickers will show bucket null", b, str(e))
+            log.warning("A bucket that is not selected from has no usable universe file; its held tickers will show bucket null")
+            report.lines.append(f"WARNING {b}: {e}; held tickers in it show bucket null")
             symbols = []
         bucket_of.update({s: b for s in symbols})
         excluded = dict.fromkeys(EXCLUDED, 0)

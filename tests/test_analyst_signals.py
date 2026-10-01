@@ -247,8 +247,9 @@ class GateTests(Env):
 
     def test_stale_file_of_an_unused_bucket_does_not_fail_the_run(self):
         (self.root / f"data/storage/LargeCap_{FRIDAY}.csv").rename(self.root / "data/storage/LargeCap_2026-01-02.csv")
-        self.run_signals()
+        report = self.run_signals()
         self.assertTrue((self.analyst / "targets" / f"targets_{FRIDAY}.json").exists())
+        self.assertTrue(any(line.startswith("WARNING LargeCap") and "older than" in line for line in report.lines))
         self.cfg["composition"] = {"LargeCap": 0.5, "MidCap": 0, "SmallCap": 0.5}
         with self.assertRaisesRegex(ValueError, "older than"):
             self.run_signals(force=True)
