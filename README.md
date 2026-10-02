@@ -2,7 +2,7 @@
 
 A Python 3.12+ service for the swing-trading system. The current implementation
 provides an HTTPS health endpoint, an NSE ticker-metadata pipeline, the Ticker Data System (OHLCV price history) and
-the Stock Analyst (broker ledger, trading journal and weekly target list).
+the Stock Analyst (broker ledger, trading journal and weekly target list) and the Risk Manager (daily and weekly buy/sell signals).
 
 ## Development
 
@@ -165,7 +165,8 @@ Every stage accepts `--check` (config and imports only). Exit codes: 0 ok, 1 fai
 (the hourly retry tries again; no email until the final Sunday attempt). A target file is never edited; a rerun for the
 same date is a no-op unless `--force`, which renames the old file `targets_{date}.superseded_{time}.json`.
 
-Configuration: `app/config/analyst.json`. It ships with the strategy repository's numbers and `"placeholders": true`, which
+Configuration: `app/config/analyst.json`. The `limits` block in the target file is informational: the Risk Manager ignores it and takes
+its limits from `risk.json`. It ships with the strategy repository's numbers and `"placeholders": true`, which
 makes Signals refuse to run: confirm the strategy values, composition and floating capital, then set it to `false`.
 `app/config/seed_positions.csv` (header only) is for the Ledger.
 
@@ -192,11 +193,79 @@ The tradebook only holds the current day, so a day the Ledger misses is recovere
 journal rows that you correct (edit the entry/exit fields; the next run recalculates and marks the row MANUAL_VERIFIED).
 The backups sit on the same disk as the data: also back up the host folder elsewhere.
 
+### Risk Manager (daily and weekly signals)
+
+Design: `app/doc/Risk_Manager_TDD.md` (read its "As-built decisions" first). It turns the Analyst's weekly target list and the
+Ledger's book into `app/data/risk/signals/signals_{asOf}.json`: what to buy or sell, how many shares and why. It keeps the account
+inside the limits in `risk.json` and measures how the strategy is doing. **Signals only**: it places no orders, has no order,
+GTT or broker call and holds no Angel One secret. Four blocks share the code: Sizer (weekly quantities, risk-based and capped),
+Risk Monitor (daily trailing stops, drawdown ladder, exposure caps, surveillance exits, tax deferral, cooldown), Signal Writer
+(one file) and the reporting-only Evaluator.
+
+| Stage | Command | When | What it does |
+|---|---|---|---|
+| Surveillance | `python -m app.risk.surveillance` | Mon-Fri 20:15 IST, hourly retry until 22:15 | Downloads the NSE ASM, GSM, trade-for-trade and price-band lists (sources from `risk.json`), normalises them to `surveillance/surveillance_{date}.json`. Exits 0 once today's list is complete |
+| Run | `python -m app.risk.run` | Mon-Thu 21:45 IST, hourly retry until 08:00 next day; Fri 21:45 until Mon 08:00 | Gate (Ticker Data ok for asOf, `^NSEI` row, Ledger succeeded, at most 10% rows missing, targets on rebalance days), cash and NAV, trailing stops and ladder, Sizer on rebalance days, the signal file, the shadow portfolio, backups |
+| Evaluate | `python -m app.risk.evaluate` | Mon-Fri 22:30 IST, hourly retry until 08:00 | Verifies the NAV rows, appends `nav/positions_daily.csv`; on Fridays writes `reports/stats_{date}.json` and `reports/tax_{FY}.json`; digest. Never changes signals or state |
+| Probe | `python -m app.risk.probe --check-nse` | Manual, before go-live and after any NSE site change | Fetches the candidate NSE list pages and prints file locations and column names (never cookies) |
+
+Every stage accepts `--check` (config and imports only, no network, no writes). Exit codes: 0 ok, 1 failed, 2 busy (run lock),
+3 gate not met (the hourly retry tries again; no email until the final attempt, which becomes a failed run "no signals for {asOf}").
+A signal file is written once; a rerun for the same asOf is a no-op unless `--force`, which renames the old file
+`signals_{asOf}.superseded_{time}.json`. Nothing is ever liquidated because of a technical fault.
+
+What the rules do (all numbers in `app/config/risk.json`, no code change needed):
+
+- **Stops**: close-based trailing stop per position, highest AdjClose since entry minus 3.5 x ATR20, clamped per bucket (Large 10-18%,
+  Mid 14-22%, Small 18-28%), ratcheting, replayed from the entry date every run; a breach on a skipped day is a STOP with `lateBreach`.
+  A STOP repeats every run until the book no longer holds the ticker, then a 10-trading-day cooldown applies to re-entry.
+- **Ladder**: drawdown of the time-weighted NAV index steps exposure down at once (-10/-15/-20/-25% to 75/50/25/0% invested) and back
+  up one rung per Friday only in BULL or TREND with the index above its 20-day low. Rung 4 is flat and stays flat until you set
+  `ladder.restartFrom` to a date; the restart resets the peak and starts at rung 3.
+- **Sizing**: 1.25% of NAV risked to the stop, per-name caps (Large 10%, Mid 8%, Small 6%), bucket budget = composition weight x NAV x
+  exposure cap, minimum order Rs 25,000, ADV participation cap, cash buffer 2%, portfolio heat cap 12%; unused budget stays cash.
+  Held names are resized only outside a no-trade band and above Rs 10,000.
+- **Tax deferral**: a rank-based DROP within 28 days of the 12-month mark, with at least 10% unrealised gain and the close above the
+  trend MA, is held (`HOLD_DEFERRED`) and released on the anniversary; any stop, ladder, surveillance or trend exit overrides it.
+- **Surveillance**: any ASM, GSM, trade-for-trade or band <= 5% flag blocks new buys; GSM and trade-for-trade also force an exit.
+  A missing or stale list blocks buys (`NO_SURVEILLANCE_DATA`) but never delays exits.
+- **Shadow portfolio**: follows every signal exactly (next raw Open, the Analyst's slippage and charges) from your NAV at go-live, with
+  its own cooldown and ladder, so the Friday report can show the tracking gap and `signalFollowedRate`.
+
+Configuration: `app/config/risk.json` (every tunable, validated at load) and `app/config/cash_flows.csv`
+(`date,type,amount_inr,note`; one `OPENING` row with the cash balance of the tracked universe, then deposits, withdrawals, dividends;
+you edit it, the Risk Manager never writes it). `app/config/nse_calendar.json`, `analyst.json` (cost model, read-only),
+`config.json` and `indices.json` are shared. Reads `app/data/market/`, `app/data/storage/` and `app/data/analyst/` read-only and writes only
+`app/data/risk/` (`signals/`, `state/`, `nav/`, `shadow/`, `reports/`, `surveillance/`, `backup/`, `risk_status.json`, `.lock`).
+Read `risk_status.json` first if you consume the signals; a `.lock` file means a run is in progress; a file whose `executionDate` has
+passed is history, not an instruction. Only the SMTP variables are needed (same env-file as the Analyst):
+
+```powershell
+docker run --rm `
+  -v C:\ProgramData\ticker-pipeline\data:/app/app/data `
+  -v C:\ProgramData\ticker-pipeline\config:/app/app/config `
+  --env-file C:\ProgramData\ticker-pipeline\secrets\analyst.env `
+  ghcr.io/debarpan-bose-chowdhury/swing-trading-risk:latest python -m app.risk.run
+```
+
+Task Scheduler triggers: Surveillance Mon-Fri 20:15 repeated every 60 minutes for 2 hours; Run Mon-Thu 21:45 repeated every 60
+minutes for 10.25 hours and Friday 21:45 for 58.25 hours; Evaluate Mon-Fri 22:30 repeated every 60 minutes until 08:00; none starts a
+new instance while one runs. Daily order: Ledger 16:30, Metadata 19:30, Surveillance 20:15, Ticker Data 21:00, (Fridays) Analyst
+Signals 21:30, Run 21:45, Evaluate 22:30. Run's gate watches Ticker Data's status file, so an Updator overrun only delays it.
+
+**Risk Manager go-live checklist:** fill `cash_flows.csv` with the OPENING row (and any later flows); calibrate `risk.json` (ATR%
+distribution per bucket, heat cap, name caps and minimum order against your capital); run `python -m app.risk.probe --check-nse`, then
+fill `surveillance.sources` (`url`, `format`, `symbolColumn`, `valueColumn`, optional `termColumn`, `filterColumn` / `filterValues`,
+`rowsKey`) until Surveillance accepts it; set `evaluator.riskFreeRatePct`, the tax rates (confirm with your CA), the SMTP values and
+the holidays in `nse_calendar.json`; finish the Ledger go-live checklist; back up the host folder (the 30-day backups share its disk).
+Until the sources are filled Surveillance exits 1 and Run blocks every buy as `NO_SURVEILLANCE_DATA`; exits keep working.
+
 ## Container
 
 `Dockerfile` builds the HTTPS service image; `Dockerfile.market` builds the Ticker Data System image (adds
 `yfinance`, `pandas`, `pyarrow`; default command `python -m app.market.updator`); `Dockerfile.analyst` builds the Stock Analyst
-image (default command `python -m app.analyst.signals`). The service image starts the HTTPS service. Mount a directory containing `cert.pem` and
+image (default command `python -m app.analyst.signals`); `Dockerfile.risk` builds the Risk Manager image (default command
+`python -m app.risk.run`, no broker secrets). The service image starts the HTTPS service. Mount a directory containing `cert.pem` and
 `key.pem`, and pass their paths into the container:
 
 ```bash
@@ -226,9 +295,10 @@ retries.
 - `app/metadata/`: ticker-metadata pipeline (`data_source`, `filter`, `cleaner`, `notifier`, shared `common`).
 - `app/market/`: Ticker Data System (`migrator`, `updator`, `archiver`; shared `validator`, `fetcher`, `store`, `registry`, `ingest`, `tradingcal`, `mailer`, `common`).
 - `app/analyst/`: Stock Analyst (`ledger`, `journal`, `broker`, `probe`, `signals`, `regime`, `selector`, `costs`, `secrets`, shared `common`).
-- `app/config/`: `config.json` (metadata pipeline), `market.json`, `indices.json`, `nse_calendar.json` (market stages), `analyst.json`, `seed_positions.csv` (analyst).
+- `app/risk/`: Risk Manager (`surveillance`, `run`, `evaluate`, `probe`; `sizer`, `monitor`, `stops`, `ladder`, `nav`, `shadow`, `evaluator`, `tax`, `surveil`, shared `common`).
+- `app/config/`: `config.json` (metadata pipeline), `market.json`, `indices.json`, `nse_calendar.json` (market stages), `analyst.json`, `seed_positions.csv` (analyst), `risk.json`, `cash_flows.csv` (risk).
 - `app/data/`: pipeline output (`raw/`, `storage/`, `market/`, `logs/`, `health.json`); git-ignored.
-- `tests/`: unit tests for the HTTP service, the metadata pipeline and the market stages (Yahoo is always faked).
+- `tests/`: unit tests for the HTTP service, the metadata pipeline, the market stages, the Analyst and the Risk Manager (Yahoo, NSE and the broker are always faked).
 
 ## CI/CD
 
@@ -240,13 +310,14 @@ the SonarQube scan. Required secrets: `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`, 
 `staging` and `production` GitHub environments before enabling deployments. All pipeline logic is shared and lives in
 CI-CD; this repo only supplies the inputs (the `images` list, compose files, HTTPS health URL, `tls-cert: true`).
 
-Two images are built in one `build-docker` job (an `images` list passed to the shared workflow):
+The images are built in one `build-docker` job (an `images` list passed to the shared workflow):
 
 | Image | Dockerfile | Role | Pipeline |
 |---|---|---|---|
 | `swing-trading-system` | `Dockerfile` | `service` | build, staging deploy, DAST, production deploy |
 | `swing-trading-market` | `Dockerfile.market` | `batch` | build, smoke-run, weekly scan (runs from Windows Task Scheduler, never deployed) |
 | `swing-trading-analyst` | `Dockerfile.analyst` | `batch` | same as the market image (smoke-run `python -m app.analyst.signals --check`) |
+| `swing-trading-risk` | `Dockerfile.risk` | `batch` | same as the market image (smoke-run `python -m app.risk.run --check`) |
 
 - **Smoke-run:** after the push, CI runs `docker run <market image> python -m app.market.updator --check`. `--check`
   (available on every market and metadata stage) loads the config (and the trading calendar), proves the dependencies

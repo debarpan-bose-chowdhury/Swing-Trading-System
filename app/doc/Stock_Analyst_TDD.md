@@ -42,7 +42,7 @@ Every point where the original notes were unclear, conflicting or unsafe was put
 | D14 | Holdings scope | Whole account implied | Only holdings in the Ticker Data registry and not in ignoreSymbols; others reported as untracked (Proposed) |
 | D15 | Journal | Handler writes it, you add details by hand | trading_journal.csv, append-only, separate auto and manual columns (Proposed) |
 | D16 | Login | "Login to Angel One" | Automated TOTP login from environment variables, no token written to disk (Proposed) |
-| D17 | Drawdown limits | 17% per position, 50% portfolio | Kept as written, validated and passed through, not enforced here (Kept) |
+| D17 | Drawdown limits | 17% per position, 50% portfolio | Kept as written, validated and passed through, not enforced here (Kept). Informational only: the Risk Manager ignores it and takes its limits from `risk.json` (Risk Manager D25) |
 | D18 | Defects in the selector code | See below | Fix all three (Proposed) |
 | D19 | Regime state | Not stated | Stateless full recompute on every run (Proposed) |
 | D20 | Deployment | Not stated | Separate image, Task Scheduler, run lock, digest email, status file, same pattern as Ticker Data (Proposed) |

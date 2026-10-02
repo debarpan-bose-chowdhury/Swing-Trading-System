@@ -1,0 +1,71 @@
+{
+  "placeholders": false,
+  "capital": { "cashFlowsFile": "app/config/cash_flows.csv", "reconcileField": null },
+  "sizing": {
+    "riskPerPositionPct": 0.0125,
+    "nameCapPct": { "LargeCap": 0.10, "MidCap": 0.08, "SmallCap": 0.06 },
+    "minNewOrderInr": 25000,
+    "minAdjustmentInr": 10000,
+    "cashBufferPct": 0.02,
+    "noTradeBand": { "relative": 0.25, "absolutePct": 0.025 },
+    "countSaleProceeds": true
+  },
+  "stops": {
+    "atrPeriod": 20,
+    "atrMultiplier": 3.5,
+    "atrMethod": "sma",
+    "priceBasis": "AdjClose",
+    "clampPct": { "LargeCap": [0.10, 0.18], "MidCap": [0.14, 0.22], "SmallCap": [0.18, 0.28] },
+    "bucketFallback": "SmallCap"
+  },
+  "cooldown": { "stopTradingDays": 10, "reentryAboveStopClose": true },
+  "ladder": {
+    "levels": [
+      { "drawdownPct": 0.10, "maxInvestedPct": 0.75 },
+      { "drawdownPct": 0.15, "maxInvestedPct": 0.50 },
+      { "drawdownPct": 0.20, "maxInvestedPct": 0.25 },
+      { "drawdownPct": 0.25, "maxInvestedPct": 0.0 }
+    ],
+    "reRisk": { "regimes": ["BULL", "TREND"], "consecutiveWeeks": 2, "navAboveMinOfPreviousDays": 20 },
+    "restartFrom": null
+  },
+  "exposure": { "regimeCap": { "BULL": 1.0, "TREND": 1.0, "WEAK": 1.0, "BEAR": 1.0, "Unknown": 1.0 } },
+  "heat": { "capPct": 0.12 },
+  "liquidity": { "advDays": 20, "maxParticipationPct": { "LargeCap": 0.01, "MidCap": 0.01, "SmallCap": 0.005 } },
+  "surveillance": {
+    "sources": { "asm": "<set after probe>", "gsm": "<set after probe>", "t2t": "<set after probe>", "bands": "<set after probe>" },
+    "blockEntryBandPct": 5,
+    "staleExitDays": 3,
+    "exitOn": ["GSM", "T2T"],
+    "maxRetries": 3,
+    "backoffSeconds": [2, 4, 8],
+    "runTime": "20:15",
+    "retryUntil": "22:15"
+  },
+  "tax": {
+    "deferral": { "enabled": true, "windowDays": 28, "minGainPct": 0.10, "requireAboveTrend": true },
+    "rates": { "asOf": "2026-10-02", "stcgPct": 0.20, "ltcgPct": 0.125, "ltcgExemptionInr": 125000, "cessPct": 0.04 }
+  },
+  "gate": { "maxMissingShare": 0.10, "maxLedgerLagTradingDays": 0, "targetsWaitUntil": "Sun 22:00", "retryUntil": "08:00" },
+  "shadow": { "enabled": true },
+  "evaluator": { "benchmark": "^NSEI", "riskFreeRatePct": 0.055, "riskFreeAsOf": "2026-09-30", "minObs": 60, "statsDay": "Fri", "bearRegime": "BEAR" },
+  "signals": { "runTime": "21:45", "retentionWeeks": 104 },
+  "paths": {
+    "risk": "app/data/risk",
+    "market": "app/data/market",
+    "analyst": "app/data/analyst",
+    "upstreamStorage": "app/data/storage",
+    "metadataConfig": "app/config/config.json",
+    "analystConfig": "app/config/analyst.json",
+    "calendar": "app/config/nse_calendar.json",
+    "indices": "app/config/indices.json",
+    "logs": "app/data/logs"
+  },
+  "lock": { "staleAfterHours": 6 },
+  "mail": {
+    "smtpHost": "<set at deployment>",
+    "smtpPort": 587,
+    "sender": "<set at deployment>",
+    "recipients": ["<set at deployment>"]
+  }
+}

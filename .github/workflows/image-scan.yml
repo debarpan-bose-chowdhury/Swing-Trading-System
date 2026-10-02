@@ -17,5 +17,5 @@ jobs:
   scan:
     uses: debarpan-bose-chowdhury/CI-CD/.github/workflows/image-periodic-scan.yml@main
     with:
-      images: '["debarpan-bose-chowdhury/swing-trading-system", "debarpan-bose-chowdhury/swing-trading-market", "debarpan-bose-chowdhury/swing-trading-analyst"]'
+      images: '["debarpan-bose-chowdhury/swing-trading-system", "debarpan-bose-chowdhury/swing-trading-market", "debarpan-bose-chowdhury/swing-trading-analyst", "debarpan-bose-chowdhury/swing-trading-risk"]'
       tags-to-scan: '["latest"]'
