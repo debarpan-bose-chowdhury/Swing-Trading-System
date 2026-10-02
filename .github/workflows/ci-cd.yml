@@ -20,7 +20,8 @@ permissions:
 #   swing-trading-system  role=service  HTTPS health service, staged, DAST-scanned and deployed
 #   swing-trading-market  role=batch    Ticker Data System stages; built, smoke-run and scanned only
 #   swing-trading-analyst role=batch    Stock Analyst stages; same handling as the market image
-#                                       (both run from Windows Task Scheduler, so nothing is deployed)
+#   swing-trading-risk    role=batch    Risk Manager stages; same handling as the market image
+#                                       (all three run from Windows Task Scheduler, so nothing is deployed)
 # `images` cannot be shared through `env` at job level, so each job below lists what it needs.
 jobs:
   ci:
@@ -48,7 +49,9 @@ jobs:
           {"name": "swing-trading-market", "language": "python", "dockerfile": "Dockerfile.market",
            "role": "batch", "smoke-command": "python -m app.market.updator --check"},
           {"name": "swing-trading-analyst", "language": "python", "dockerfile": "Dockerfile.analyst",
-           "role": "batch", "smoke-command": "python -m app.analyst.signals --check"}
+           "role": "batch", "smoke-command": "python -m app.analyst.signals --check"},
+          {"name": "swing-trading-risk", "language": "python", "dockerfile": "Dockerfile.risk",
+           "role": "batch", "smoke-command": "python -m app.risk.run --check"}
         ]
     secrets:
       REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
@@ -66,7 +69,8 @@ jobs:
           {"name": "swing-trading-system", "role": "service", "compose-service": "app",
            "health-url": "https://localhost:8080/health"},
           {"name": "swing-trading-market", "role": "batch"},
-          {"name": "swing-trading-analyst", "role": "batch"}
+          {"name": "swing-trading-analyst", "role": "batch"},
+          {"name": "swing-trading-risk", "role": "batch"}
         ]
 
   dast-scan:
@@ -82,7 +86,8 @@ jobs:
         [
           {"name": "swing-trading-system", "role": "service", "compose-service": "app"},
           {"name": "swing-trading-market", "role": "batch"},
-          {"name": "swing-trading-analyst", "role": "batch"}
+          {"name": "swing-trading-analyst", "role": "batch"},
+          {"name": "swing-trading-risk", "role": "batch"}
         ]
 
   deploy-production:
@@ -98,5 +103,6 @@ jobs:
           {"name": "swing-trading-system", "role": "service", "compose-service": "app",
            "health-url": "https://localhost:8080/health"},
           {"name": "swing-trading-market", "role": "batch"},
-          {"name": "swing-trading-analyst", "role": "batch"}
+          {"name": "swing-trading-analyst", "role": "batch"},
+          {"name": "swing-trading-risk", "role": "batch"}
         ]
