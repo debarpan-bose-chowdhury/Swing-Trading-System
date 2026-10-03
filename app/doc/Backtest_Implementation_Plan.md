@@ -143,3 +143,14 @@ Decided with you: bhavcopy layer first, probe-first formats, bucket rule and dea
 `python -m backtest.bhav`: `--probe` (one file per format, checks the configured URL and column names; `--download` refuses until both pass), `--download` (resumable raw cache under `backtest/data/bhav/raw/`, 404s remembered), `--build` (one Parquet per year), `--crosscheck [--strict]` (Yahoo vs bhavcopy over every common date: PRICE_SPIKE, RATIO_BREAK = split/bonus step, NO_BHAV_ROW, NO_YAHOO_ROW, VOLUME_MISMATCH report-only). With the whole history cached the check covers every ticker-day, a superset of the approved "anomalies plus 2% sample". Close tolerance 0.5%, volume 10%, as approved. The NSE hosts are not reachable from the cloud, so the URL templates and column names in `backtest.json` stay unverified until `--probe` passes on your PC.
 
 Not built yet (Phase 7b, needs the real counts): point-in-time universe, bucket rule, dead-name corporate-action handling, and feeding dead names' raw prices into `pit.py`.
+
+### Runtime spike on your PC (first real run, `bench --workers 8`)
+
+Real data: 143 names (all with history), 4,672 index rows, common start 2008-11-19, tuning region to 2023-09-21 (3,637 sessions). Build (load, regime, panels) 17 s.
+
+| | Cloud box, synthetic, NO trades | Your PC, real data, NO trades |
+|---|---|---|
+| ms per session | 19 | 62.5 (15.8 s per simulated year, 227 s per 14.8-year run) |
+| 8 parallel runs | n/a (4 cores) | slowest worker 1.41x slower than alone, throughput 5.7x, 16 s to start workers |
+
+That run made 0 fills (Rs 1 lakh cannot meet the live Rs 25,000 minimum order), so it measures targets, the ladder and bookkeeping only. A trading run costs more: on the cloud box trades took a run from 19 to 73 ms per session (3.8x), mostly the stop engine replaying each open position every day. Scaling that to your PC gives an ESTIMATE of about 240 ms per session, 14 minutes per 15-year run, and a 30-point strict gate of about 29 h on one worker or about 5 h on 8 workers. Re-run with `--set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500` for the real figure.

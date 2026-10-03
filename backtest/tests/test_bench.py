@@ -34,3 +34,10 @@ class BenchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SetParsing(unittest.TestCase):
+    def test_set_pairs(self):
+        self.assertEqual(bench.parse_set(["sizing.minNewOrderInr=3000", "stops.atrMultiplier=3.5"]), {"sizing.minNewOrderInr": 3000, "stops.atrMultiplier": 3.5})
+        with self.assertRaises(ValueError):
+            bench.parse_set(["nokey"])

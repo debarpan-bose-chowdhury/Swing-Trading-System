@@ -10,6 +10,7 @@ simulations a full strict-gate run needs (section "Session.gate_report") and mul
 
 import argparse
 import cProfile
+import os
 import io
 import pstats
 import sys
@@ -19,6 +20,7 @@ from concurrent.futures import ProcessPoolExecutor
 import pandas as pd
 
 from backtest import config, params, prep, replay, walkforward, world
+from backtest.targets import Targets
 
 _WORLD: world.World | None = None
 
@@ -28,9 +30,29 @@ def _simulate(w: world.World, start: str, end: str) -> replay.Result:
                            carry_over_days=w.cfg["fill"]["carryOverDays"], dividends=w.dividends)
 
 
-def _init_worker() -> None:
+def _with_point(w: world.World, schema: params.Schema, point: dict) -> world.World:
+    """The world with a parameter point applied (identity when the point is empty)."""
+    if not point:
+        return w
+    risk, analyst = schema.apply(point)
+    return world.World(w.cfg, risk, analyst, w.data, Targets(w.data, analyst), w.dividends, w.surveillance)
+
+
+def _init_worker(point: dict) -> None:
     global _WORLD
-    _WORLD = world.World.build(config.load())
+    w = world.World.build(config.load())
+    _WORLD = _with_point(w, params.Schema.load(w.cfg["paths"]["params"], w.risk, w.analyst), point)
+
+
+def parse_set(items: list[str]) -> dict:
+    """--set key=value pairs (numbers) -> a partial parameter point."""
+    out = {}
+    for item in items:
+        key, _, raw = item.partition("=")
+        if not raw:
+            raise ValueError(f"--set expects key=value, got {item!r}")
+        out[key] = int(raw) if raw.lstrip("-").isdigit() else float(raw)
+    return out
 
 
 def _task(span: tuple[str, str]) -> tuple[int, float]:
@@ -61,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", action="store_true", help="print the top functions by own time")
     parser.add_argument("--workers", type=int, default=0, help="also time this many simulations in parallel processes")
     parser.add_argument("--tried", type=int, default=30, help="parameter sets in the gate projection")
+    parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                        help="parameter overrides from params.json, e.g. --set sizing.minNewOrderInr=3000 (repeatable); the live config at Rs 1 lakh cannot trade")
     args = parser.parse_args(argv)
     try:
         cfg = config.load()
@@ -68,7 +92,9 @@ def main(argv: list[str] | None = None) -> int:
         w = world.World.build(cfg)
         t_build = time.perf_counter() - t0
         schema = params.Schema.load(cfg["paths"]["params"], w.risk, w.analyst)
+        point = parse_set(args.set)
         wf = windows_for(w, schema)
+        w = _with_point(w, schema, point)
         start = wf.start
         end = wf.tuning_end if args.years is None else str(pd.Timestamp(start) + pd.Timedelta(days=int(args.years * 365.25)))[:10]
         end = min(end, wf.tuning_end)
@@ -82,9 +108,14 @@ def main(argv: list[str] | None = None) -> int:
         t_run = time.perf_counter() - t1
         sessions = len(result.nav)
         per_session = t_run / sessions
+        print(f"cpu threads {os.cpu_count()}; point overrides {point or 'none (live config)'}")
         print(f"universe {sum(map(len, w.data.buckets.values()))} names, {len(w.data.series)} with history; index {len(w.data.index)} rows")
         print(f"build (load prices, regime, panels): {t_build:.1f}s")
         print(f"one run {start}..{end}: {sessions} sessions, {len(result.fills)} fills, {t_run:.1f}s = {1000 * per_session:.1f} ms/session, {t_run / (sessions / 252):.1f}s per simulated year")
+        if not len(result.fills):
+            print("WARNING: 0 fills. This configuration cannot trade at this capital (the smallest position the sizer can open is below "
+                  "sizing.minNewOrderInr), so the timing leaves out position handling and understates a real run. "
+                  "Re-run with e.g. --set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500")
         if prof:
             out = io.StringIO()
             pstats.Stats(prof, stream=out).sort_stats("tottime").print_stats(15)
@@ -96,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  one worker: {full_s / 3600:.1f} h; with 8 workers at ideal scaling: {full_s / 8 / 3600:.1f} h")
         if args.workers > 1:
             t2 = time.perf_counter()
-            with ProcessPoolExecutor(args.workers, initializer=_init_worker) as pool:
+            with ProcessPoolExecutor(args.workers, initializer=_init_worker, initargs=(point,)) as pool:
                 got = list(pool.map(_task, [(start, end)] * args.workers))
             wall = time.perf_counter() - t2
             slowest = max(s for _, s in got)
