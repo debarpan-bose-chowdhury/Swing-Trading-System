@@ -2,7 +2,7 @@
 
 Batch-job pipeline for NSE data, signals and risk checks. Python 3.12, managed with `uv`. No database,
 no server (except an optional stdlib HTTPS `/health`). Data is flat files under `app/data/` (git-ignored).
-Full setup: `docs/LOCAL_SETUP.md`.
+Full setup: `app/doc/LOCAL_SETUP.md`.
 
 ## Rules
 - Run everything from the repo root (config/data paths are relative) with the venv active or via `uv run`.

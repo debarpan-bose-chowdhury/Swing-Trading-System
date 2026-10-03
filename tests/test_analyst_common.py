@@ -85,7 +85,7 @@ class CostTests(unittest.TestCase):
 
 class RunStageTests(unittest.TestCase):
     def setUp(self):
-        self._cwd, self.tmp = os.getcwd(), tempfile.TemporaryDirectory()
+        self._cwd, self.tmp = os.getcwd(), tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.tmp.cleanup)
         self.addCleanup(os.chdir, self._cwd)
         root = Path(self.tmp.name)

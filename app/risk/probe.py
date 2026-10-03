@@ -17,10 +17,10 @@ from app.risk.surveillance import NSE_HOME
 
 # UNVERIFIED candidate pages (NSE blocks scripted requests and no file location was confirmed in the research pass).
 CANDIDATES = {
-    "asm": "https://www.nseindia.com/regulations/additional-surveillance-measure-asm",
-    "gsm": "https://www.nseindia.com/regulations/graded-surveillance-measure-gsm",
-    "t2t": "https://www.nseindia.com/market-data/securities-available-for-trading",
-    "bands": "https://www.nseindia.com/products-services/equity-market-price-band",
+    "asm": "https://www.nseindia.com/api/reportASM?csv=true",
+    "gsm": "https://www.nseindia.com/api/reportGSM?csv=true",
+    "t2t": "https://nsearchives.nseindia.com/content/equities/series_change.csv",
+    "bands": "https://nsearchives.nseindia.com/content/equities/sec_list.csv",
 }
 LINK = re.compile(r"""["'(]([^"'()\s]+\.(?:csv|json|xlsx?|zip))""", re.I)
 

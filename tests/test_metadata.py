@@ -51,7 +51,7 @@ def make_cfg(root: Path, buckets=None) -> dict:
 
 class TmpCase(unittest.TestCase):
     def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
+        tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
         self.cfg = make_cfg(self.root)

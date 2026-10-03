@@ -195,7 +195,7 @@ class ProbeTests(unittest.TestCase):
                 pass
 
             def get(self, url):
-                if "gsm" in url:
+                if "gsm" in url.lower():
                     raise OSError("blocked")
                 return b"Symbol,Stage\nA,1\n"
 
