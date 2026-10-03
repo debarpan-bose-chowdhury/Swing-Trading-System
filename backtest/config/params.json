@@ -1,0 +1,530 @@
+{
+ "confirmed": false,
+ "note": "PROPOSED bounds around the live defaults. Edit freely, then set confirmed to true; the overfitting gate refuses to run until you do.",
+ "constraints": [
+  {
+   "le": [
+    "sizing.minAdjustmentInr",
+    "sizing.minNewOrderInr"
+   ]
+  }
+ ],
+ "params": [
+  {
+   "key": "selector.lookback.BULL",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "strategies.BULL.*.lookback"
+   ],
+   "low": 63,
+   "high": 189,
+   "step": 21,
+   "kind": "int"
+  },
+  {
+   "key": "selector.lookback.TREND",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "strategies.TREND.*.lookback"
+   ],
+   "low": 126,
+   "high": 210,
+   "step": 21,
+   "kind": "int"
+  },
+  {
+   "key": "selector.lookback.WEAK",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "strategies.WEAK.*.lookback"
+   ],
+   "low": 42,
+   "high": 126,
+   "step": 21,
+   "kind": "int"
+  },
+  {
+   "key": "selector.lookback.BEAR",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "strategies.BEAR.*.lookback"
+   ],
+   "low": 42,
+   "high": 84,
+   "step": 21,
+   "kind": "int"
+  },
+  {
+   "key": "selector.topN.BULL",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "strategies.BULL.*.top_n"
+   ],
+   "low": 1,
+   "high": 4,
+   "step": 1,
+   "kind": "int"
+  },
+  {
+   "key": "selector.topN.TREND",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "strategies.TREND.*.top_n"
+   ],
+   "low": 2,
+   "high": 6,
+   "step": 1,
+   "kind": "int"
+  },
+  {
+   "key": "selector.topN.WEAK",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "strategies.WEAK.*.top_n"
+   ],
+   "low": 3,
+   "high": 9,
+   "step": 1,
+   "kind": "int"
+  },
+  {
+   "key": "selector.topN.BEAR",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "strategies.BEAR.*.top_n"
+   ],
+   "low": 4,
+   "high": 12,
+   "step": 1,
+   "kind": "int"
+  },
+  {
+   "key": "selector.trendMa",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "strategies.*.*.stock_trend_ma"
+   ],
+   "low": 100,
+   "high": 200,
+   "step": 25,
+   "kind": "int"
+  },
+  {
+   "key": "selector.minAdvCr",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "selector.liquidity.minAdvCr"
+   ],
+   "low": 5,
+   "high": 20,
+   "step": 5,
+   "kind": "int"
+  },
+  {
+   "key": "selector.bear.mom20",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "selector.bearScore.mom20"
+   ],
+   "low": 0.2,
+   "high": 0.6,
+   "step": 0.1,
+   "kind": "float"
+  },
+  {
+   "key": "selector.bear.mom63",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "selector.bearScore.mom63"
+   ],
+   "low": 0.15,
+   "high": 0.55,
+   "step": 0.1,
+   "kind": "float"
+  },
+  {
+   "key": "selector.bear.hit20",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "selector.bearScore.hit20"
+   ],
+   "low": 0.0,
+   "high": 0.4,
+   "step": 0.1,
+   "kind": "float"
+  },
+  {
+   "key": "selector.bear.vol20",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "selector.bearScore.vol20"
+   ],
+   "low": -0.55,
+   "high": -0.15,
+   "step": 0.1,
+   "kind": "float"
+  },
+  {
+   "key": "selector.bear.dd63",
+   "group": "selector",
+   "target": "analyst",
+   "paths": [
+    "selector.bearScore.dd63"
+   ],
+   "low": 0.0,
+   "high": 0.3,
+   "step": 0.1,
+   "kind": "float"
+  },
+  {
+   "key": "stops.atrPeriod",
+   "group": "stops",
+   "target": "risk",
+   "paths": [
+    "stops.atrPeriod"
+   ],
+   "low": 10,
+   "high": 30,
+   "step": 5,
+   "kind": "int"
+  },
+  {
+   "key": "stops.atrMultiplier",
+   "group": "stops",
+   "target": "risk",
+   "paths": [
+    "stops.atrMultiplier"
+   ],
+   "low": 2.5,
+   "high": 4.5,
+   "step": 0.5,
+   "kind": "float"
+  },
+  {
+   "key": "stops.clamp.LargeCap.lo",
+   "group": "stops",
+   "target": "risk",
+   "paths": [
+    "stops.clampPct.LargeCap.0"
+   ],
+   "low": 0.08,
+   "high": 0.12,
+   "step": 0.01,
+   "kind": "float"
+  },
+  {
+   "key": "stops.clamp.LargeCap.hi",
+   "group": "stops",
+   "target": "risk",
+   "paths": [
+    "stops.clampPct.LargeCap.1"
+   ],
+   "low": 0.15,
+   "high": 0.21,
+   "step": 0.01,
+   "kind": "float"
+  },
+  {
+   "key": "stops.clamp.MidCap.lo",
+   "group": "stops",
+   "target": "risk",
+   "paths": [
+    "stops.clampPct.MidCap.0"
+   ],
+   "low": 0.12,
+   "high": 0.16,
+   "step": 0.01,
+   "kind": "float"
+  },
+  {
+   "key": "stops.clamp.MidCap.hi",
+   "group": "stops",
+   "target": "risk",
+   "paths": [
+    "stops.clampPct.MidCap.1"
+   ],
+   "low": 0.19,
+   "high": 0.25,
+   "step": 0.01,
+   "kind": "float"
+  },
+  {
+   "key": "stops.clamp.SmallCap.lo",
+   "group": "stops",
+   "target": "risk",
+   "paths": [
+    "stops.clampPct.SmallCap.0"
+   ],
+   "low": 0.16,
+   "high": 0.2,
+   "step": 0.01,
+   "kind": "float"
+  },
+  {
+   "key": "stops.clamp.SmallCap.hi",
+   "group": "stops",
+   "target": "risk",
+   "paths": [
+    "stops.clampPct.SmallCap.1"
+   ],
+   "low": 0.25,
+   "high": 0.31,
+   "step": 0.01,
+   "kind": "float"
+  },
+  {
+   "key": "sizing.riskPerPositionPct",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "sizing.riskPerPositionPct"
+   ],
+   "low": 0.005,
+   "high": 0.025,
+   "step": 0.0025,
+   "kind": "float"
+  },
+  {
+   "key": "sizing.nameCap.LargeCap",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "sizing.nameCapPct.LargeCap"
+   ],
+   "low": 0.06,
+   "high": 0.15,
+   "step": 0.01,
+   "kind": "float"
+  },
+  {
+   "key": "sizing.nameCap.MidCap",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "sizing.nameCapPct.MidCap"
+   ],
+   "low": 0.04,
+   "high": 0.12,
+   "step": 0.01,
+   "kind": "float"
+  },
+  {
+   "key": "sizing.nameCap.SmallCap",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "sizing.nameCapPct.SmallCap"
+   ],
+   "low": 0.03,
+   "high": 0.1,
+   "step": 0.01,
+   "kind": "float"
+  },
+  {
+   "key": "sizing.heatCap",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "heat.capPct"
+   ],
+   "low": 0.06,
+   "high": 0.2,
+   "step": 0.02,
+   "kind": "float"
+  },
+  {
+   "key": "sizing.cashBuffer",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "sizing.cashBufferPct"
+   ],
+   "low": 0.01,
+   "high": 0.05,
+   "step": 0.01,
+   "kind": "float"
+  },
+  {
+   "key": "sizing.minNewOrderInr",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "sizing.minNewOrderInr"
+   ],
+   "low": 2000,
+   "high": 10000,
+   "step": 1000,
+   "kind": "int"
+  },
+  {
+   "key": "sizing.minAdjustmentInr",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "sizing.minAdjustmentInr"
+   ],
+   "low": 1000,
+   "high": 5000,
+   "step": 500,
+   "kind": "int"
+  },
+  {
+   "key": "ladder.drawdown1",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "ladder.levels.0.drawdownPct"
+   ],
+   "low": 0.06,
+   "high": 0.14,
+   "step": 0.02,
+   "kind": "float"
+  },
+  {
+   "key": "ladder.drawdown2",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "ladder.levels.1.drawdownPct"
+   ],
+   "low": 0.11,
+   "high": 0.19,
+   "step": 0.02,
+   "kind": "float"
+  },
+  {
+   "key": "ladder.drawdown3",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "ladder.levels.2.drawdownPct"
+   ],
+   "low": 0.16,
+   "high": 0.24,
+   "step": 0.02,
+   "kind": "float"
+  },
+  {
+   "key": "ladder.drawdown4",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "ladder.levels.3.drawdownPct"
+   ],
+   "low": 0.21,
+   "high": 0.29,
+   "step": 0.02,
+   "kind": "float"
+  },
+  {
+   "key": "ladder.invested1",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "ladder.levels.0.maxInvestedPct"
+   ],
+   "low": 0.65,
+   "high": 0.85,
+   "step": 0.05,
+   "kind": "float"
+  },
+  {
+   "key": "ladder.invested2",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "ladder.levels.1.maxInvestedPct"
+   ],
+   "low": 0.4,
+   "high": 0.6,
+   "step": 0.05,
+   "kind": "float"
+  },
+  {
+   "key": "ladder.invested3",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "ladder.levels.2.maxInvestedPct"
+   ],
+   "low": 0.15,
+   "high": 0.35,
+   "step": 0.05,
+   "kind": "float"
+  },
+  {
+   "key": "cooldown.stopTradingDays",
+   "group": "sizing",
+   "target": "risk",
+   "paths": [
+    "cooldown.stopTradingDays"
+   ],
+   "low": 5,
+   "high": 20,
+   "step": 5,
+   "kind": "int"
+  },
+  {
+   "key": "regime.smaFast",
+   "group": "regime",
+   "target": "analyst",
+   "paths": [
+    "regime.smaFast"
+   ],
+   "low": 30,
+   "high": 70,
+   "step": 10,
+   "kind": "int"
+  },
+  {
+   "key": "regime.smaSlow",
+   "group": "regime",
+   "target": "analyst",
+   "paths": [
+    "regime.smaSlow"
+   ],
+   "low": 150,
+   "high": 250,
+   "step": 25,
+   "kind": "int"
+  },
+  {
+   "key": "regime.momentumDays",
+   "group": "regime",
+   "target": "analyst",
+   "paths": [
+    "regime.momentumDays"
+   ],
+   "low": 42,
+   "high": 84,
+   "step": 21,
+   "kind": "int"
+  },
+  {
+   "key": "regime.persistenceWeeks",
+   "group": "regime",
+   "target": "analyst",
+   "paths": [
+    "regime.persistenceWeeks"
+   ],
+   "low": 2,
+   "high": 6,
+   "step": 1,
+   "kind": "int"
+  }
+ ]
+}

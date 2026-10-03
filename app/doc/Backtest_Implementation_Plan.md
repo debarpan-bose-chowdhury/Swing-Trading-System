@@ -111,3 +111,14 @@ After the loop, `tax.py` turns the fill stream into FIFO lots, charges tax at ea
 - Total-return benchmark source (deferred; the price index is used until then).
 - Trial budget per HPO campaign (decides the screener).
 - Confirm or edit the stress-window dates and objective definitions in section 1.
+
+## 8. Progress and deviations (updated after Phase 5)
+
+Done and pushed: phases 0 to 5 (see `git log`). Offline tests: `uv run --project backtest pytest backtest/tests`.
+
+Deviations from sections 1 to 7, all decided with you or forced by the code:
+- **Account size:** a Rs 1 lakh account never trades under the live `risk.json` (smallest position the sizer can open is below `minNewOrderInr` 25,000). You chose to keep Rs 1 lakh and tune the sizing minimums, name caps and risk per position (`params.json`, group "sizing"). Until a value is confirmed a plain `--single` run at the live config makes no trades.
+- **Purge unit:** `walkforward.purgeDays` is read in trading days (the selector's look-backs are). The effective purge is the larger of the config value and the longest look-back any allowed parameter can use: 250 sessions with the proposed bounds (slow SMA up to 250).
+- **Common start:** index row `smaSlow high + 9 + 5 x persistenceWeeks high` (about early 2009 with the proposed bounds).
+- **Parameter bounds** in `backtest/config/params.json` are PROPOSED around the live defaults (`confirmed: false`); `Session.gate_report` refuses to run until you review them and set `confirmed` to true. `minNewOrderInr` and `minAdjustmentInr` live values (25,000 / 10,000) lie outside the proposed bounds, so their default point is clipped to the bound.
+- **Charges, dividends tax, bhavcopy cross-check** are unchanged from section 1; the bhavcopy parsers are still to be built before the golden file.
