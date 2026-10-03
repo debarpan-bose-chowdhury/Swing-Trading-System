@@ -30,7 +30,7 @@
   "bhav": {
     "note": "URL templates and column names are from the TDD and memory, UNVERIFIED. `python -m backtest.bhav --probe` downloads one file of each format on your PC and checks them; --download refuses until both probes pass.",
     "from": "2007-09-17",
-    "seriesKeep": ["EQ"],
+    "seriesKeep": ["EQ", "BE", "BZ"],
     "probeDays": { "legacy": ["2007-09-17", "2008-01-02", "2015-06-02", "2024-07-05"], "udiff": ["2024-07-09", "2026-09-30"] },
     "client": { "homeUrl": "https://www.nseindia.com", "maxRetries": 3, "backoffSeconds": [2, 4, 8], "gapSeconds": 1.0, "abortAfterFailures": 10 },
     "crosscheck": { "closeTolerance": 0.005, "volumeTolerance": 0.10 },

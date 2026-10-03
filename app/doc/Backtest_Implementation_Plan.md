@@ -186,3 +186,10 @@ The poor scaling is not seen on the 4-core cloud box (4 workers: 1.0x slowdown),
 ### Bhavcopy on your PC: first complete run
 
 Probe passed on all six sample days. Download cached 4,698 trading days (2,151 fetched in the last run plus 2,547 cached); one day failed: 2020-07-13 writes dates as `13-Jul-20`. Fixed (a two-digit year is read with `%y`). Build: 20 yearly Parquet files, 78k rows for 2007 up to 530k for 2025. Cross-check totals: NO_BHAV_ROW 1,488, NO_YAHOO_ROW 1,014, VOLUME_MISMATCH 611, PRICE_SPIKE 544, RATIO_BREAK 366. `--summary` explains what they are made of (series the missing days traded in, whole-market gaps, which breaks look like real split/bonus factors). One hypothesis to test before trusting any total: `seriesKeep` is `["EQ"]`, so a ticker-day in series BE/BZ (trade-for-trade) would show as NO_BHAV_ROW.
+
+### Bhavcopy cross-check, first reading (your PC, after the full download)
+
+- **NO_BHAV_ROW 1,373:** 1,195 are days the stock traded in BE/BZ (trade-for-trade), hidden by the EQ-only filter; 142 are 2025-10-21 (Diwali Muhurat), missing from the app's `nse_calendar.json` so no file was downloaded. Fix: `seriesKeep` is now `["EQ", "BE", "BZ"]` with EQ winning a duplicate. Rebuild with `--build`.
+- **NO_YAHOO_ROW 1,014:** mostly Diwali Muhurat sessions Yahoo does not carry (2012-10-26, 2013-11-03, 2014-10-23, 2015-11-11, 2016-10-30, 2023-11-12). 2019-02-13 and 2019-03-29 (110 tickers each) are not Muhurat days: gaps in the Yahoo data.
+- **PRICE_SPIKE 544:** median departure 1.1%, 90th percentile 3.4%, 99th 7.4%; clusters on volatile days. Most likely Yahoo's last-trade close versus NSE's 30-minute-average close, not bad data. `--summary` now splits them by size (20%+ are the ones to inspect).
+- **RATIO_BREAK 366:** 143 look like splits and bonuses; 191 are 1 to 5% steps, which suggests dividend- or rights-adjusted closes. `--summary` now tests whether the stored Close is price-only (compares those breaks with Yahoo dividend ex-dates and AdjClose/Close steps). The answer decides whether the backtest's dividend credits would double count.

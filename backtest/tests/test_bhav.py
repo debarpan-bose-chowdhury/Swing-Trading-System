@@ -86,10 +86,10 @@ class ParseTests(TreeCase):
 
     def test_both_formats_normalise_and_filter_series(self):
         keep = self.cfg["bhav"]["seriesKeep"]
-        a = bhav.parse(legacy_text("2008-01-02", [("AAA", "EQ", 100.5, 10), ("BBB", "BE", 50.0, 5)]), self.cfg["bhav"]["formats"]["legacy"], keep, "2008-01-02")
+        a = bhav.parse(legacy_text("2008-01-02", [("AAA", "EQ", 100.5, 10), ("BBB", "N3", 50.0, 5)]), self.cfg["bhav"]["formats"]["legacy"], keep, "2008-01-02")
         self.assertEqual(a.to_dict("records")[0] | {"Isin": ""}, {"Ticker": "AAA", "Date": "2008-01-02", "Series": "EQ", "Open": 100.5, "High": 100.5, "Low": 100.5,
                                                                    "Close": 100.5, "PrevClose": 100.5, "Volume": 10.0, "Value": 1005.0, "Isin": ""})
-        self.assertEqual(len(a), 1)  # BE dropped
+        self.assertEqual(len(a), 1)  # N3 (a debt series) dropped
         u = bhav.parse(udiff_text("2024-07-09", [("AAA", "EQ", 7.0, 3)]), self.cfg["bhav"]["formats"]["udiff"], keep, "2024-07-09")
         self.assertEqual((u.Ticker[0], u.Close[0], u.Volume[0]), ("AAA", 7.0, 3.0))
 
@@ -253,3 +253,31 @@ class DateAndSummaryTests(TreeCase):
         y.loc[5, "Close"] *= 1.05
         out = bhav.crosscheck({"AAA": y}, b, {"closeTolerance": 0.005, "volumeTolerance": 0.10})
         self.assertRegex(out[out.Kind == "PRICE_SPIKE"].Detail.iloc[0], r"yahoo \d+\.\d\d vs bhav \d+\.\d\d")
+
+
+class SeriesAndBasisTests(TreeCase):
+    def setUp(self):
+        super().setUp()
+        self.cfg = json.loads(json.dumps(CFG))
+        self.cfg["paths"]["data"] = "backtest/data"
+
+    def test_trade_for_trade_days_are_kept_and_the_first_series_wins_a_duplicate(self):
+        text = legacy_text("2020-03-02", [("AAA", "BE", 10.0, 5), ("BBB", "EQ", 20.0, 5), ("BBB", "BE", 99.0, 1), ("CCC", "N3", 5.0, 1)])
+        got = bhav.parse(text, self.cfg["bhav"]["formats"]["legacy"], self.cfg["bhav"]["seriesKeep"], "2020-03-02").set_index("Ticker")
+        self.assertEqual(sorted(got.index), ["AAA", "BBB"])  # N3 (debt) stays out
+        self.assertEqual((got.Series["AAA"], got.Series["BBB"], got.Close["BBB"]), ("BE", "EQ", 20.0))
+
+    def test_adjustment_basis_tells_dividend_adjusted_close_from_price_only(self):
+        days = weekdays("2024-01-01", 40)
+        data = type("D", (), {})()
+        # price-only Close: AdjClose below Close before the dividend on day 20
+        f = np.ones(40)
+        f[:20] = 0.97
+        data.series = {"AAA": bars("AAA", days, 100.0, adj_factor=f)}
+        out = pd.DataFrame([("AAA", days[20], "RATIO_BREAK", 1.03, "")], columns=["Ticker", "Date", "Kind", "Value", "Detail"])
+        Path("backtest/data").mkdir(parents=True)
+        pd.DataFrame({"Ticker": ["AAA"], "ExDate": [days[20]], "Amount": [3.0]}).to_csv("backtest/data/dividends.csv", index=False)
+        text = "\n".join(bhav.adjustment_basis(self.cfg, out, data))
+        self.assertIn("below 0.99 for 1 of 1", text)
+        self.assertIn("AdjClose/Close step in the stored data: 1", text)
+        self.assertIn("Yahoo dividend ex-date: 1", text)

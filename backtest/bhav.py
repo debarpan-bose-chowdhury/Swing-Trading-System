@@ -105,6 +105,8 @@ def parse(text: str, fmt: dict, keep: list[str], day: str | None = None) -> pd.D
         raise ValueError(f"columns not found in the file: {', '.join(missing)} (file has {list(df.columns)})")
     c = fmt["columns"]
     df = df[df[c["series"]].str.strip().isin(keep)]
+    df = df.assign(_rank=df[c["series"]].str.strip().map({k: i for i, k in enumerate(keep)})).sort_values("_rank", kind="stable")
+    df = df.drop_duplicates([c["symbol"], fmt["dateColumn"]], keep="first")  # one row per symbol and day; the earlier series in `keep` wins
     out = pd.DataFrame({
         "Ticker": df[c["symbol"]].str.strip(), "Date": to_iso(df[fmt["dateColumn"]].str.strip(), fmt["dateFormat"]),
         "Series": df[c["series"]].str.strip(), "Isin": df[c["isin"]].str.strip() if c["isin"] in df.columns else ""})
@@ -276,7 +278,38 @@ def counts(s: pd.Series, top: int | None = None) -> dict:
     return {k: int(v) for k, v in (s if top is None else s.head(top)).items()}
 
 
-def summarize(cfg: dict, out: pd.DataFrame, top: int = 8) -> str:
+SMALL_STEP = (1.003, 1.08)  # step sizes that dividends or rights-issue adjustments produce, not splits
+
+
+def adjustment_basis(cfg: dict, out: pd.DataFrame, data) -> list[str]:
+    """Is the stored Yahoo Close price-only or already dividend-adjusted? Compare small ratio breaks with Yahoo dividend ex-dates and
+    with steps in AdjClose/Close, and look at how far AdjClose sits from Close at the start of each series."""
+    lines = []
+    first = pd.Series({t: float(df.AdjClose.iloc[0] / df.Close.iloc[0]) for t, df in data.series.items() if len(df)})
+    lines.append(f"AdjClose/Close at each series' first row: below 0.99 for {int((first < 0.99).sum())} of {len(first)} tickers, median {first.median():.3f}"
+                 " (a price-only Close gives values below 1 for dividend payers; all 1.000 would mean Close is already dividend-adjusted)")
+    g = out[out.Kind == "RATIO_BREAK"]
+    f = g.Value.where(g.Value >= 1, 1 / g.Value)
+    small = g[(f > SMALL_STEP[0]) & (f < SMALL_STEP[1])]
+    if small.empty:
+        return lines
+    path = Path(cfg["paths"]["data"]) / "dividends.csv"
+    ex = set(zip(*[pd.read_csv(path, dtype=str)[c] for c in ("Ticker", "ExDate")])) if path.exists() else None
+    adj_step = 0
+    for r in small.itertuples():
+        df = data.series.get(r.Ticker)
+        if df is None:
+            continue
+        i = int(np.searchsorted(df.Date.to_numpy(), r.Date))
+        if 0 < i < len(df) and i < len(df) and df.Date.iloc[i] == r.Date:
+            a = df.AdjClose.to_numpy(float) / df.Close.to_numpy(float)
+            adj_step += abs(a[i] / a[i - 1] - 1) > 0.002
+    lines.append(f"small ratio breaks (1-8%): {len(small)}; coincide with an AdjClose/Close step in the stored data: {int(adj_step)}; "
+                 + (f"coincide with a Yahoo dividend ex-date: {sum((r.Ticker, r.Date) in ex for r in small.itertuples())}" if ex is not None else "dividends.csv not found (run prep --dividends)"))
+    return lines
+
+
+def summarize(cfg: dict, out: pd.DataFrame, top: int = 8, data=None) -> str:
     """A compact text report of bhav_crosscheck.csv: what the findings are made of."""
     lines = [f"findings {counts(out.Kind.value_counts())} over {out.Ticker.nunique()} tickers"]
     out = out.assign(Year=out.Date.str[:4])
@@ -296,6 +329,9 @@ def summarize(cfg: dict, out: pd.DataFrame, top: int = 8) -> str:
         per_day = g.Date.value_counts()
         lines.append(f"PRICE_SPIKE: {len(g)}; |departure| quantiles 50/90/99% = {[round(float(g.Value.abs().quantile(q)), 3) for q in (.5, .9, .99)]}; "
                      f"dates with 5+ tickers {counts(per_day[per_day >= 5], top)}; top tickers {counts(g.Ticker.value_counts(), top)}")
+        a = g.Value.abs()
+        lines.append(f"  by size: <1% {int((a < .01).sum())}, 1-2% {int(((a >= .01) & (a < .02)).sum())}, 2-5% {int(((a >= .02) & (a < .05)).sum())}, "
+                     f"5-20% {int(((a >= .05) & (a < .2)).sum())}, 20%+ {int((a >= .2).sum())}")
         lines.append("  largest: " + " | ".join(f"{r.Ticker} {r.Date} {r.Detail}" for r in g.reindex(g.Value.abs().sort_values(ascending=False).index).head(5).itertuples()))
     g = out[out.Kind == "RATIO_BREAK"]
     if len(g):
@@ -304,6 +340,8 @@ def summarize(cfg: dict, out: pd.DataFrame, top: int = 8) -> str:
         lines.append(f"RATIO_BREAK: {len(g)}; {int(nice.sum())} look like split/bonus factors, {int((~nice).sum())} do not; most common step sizes {counts(f.round(2).value_counts(), top)}")
         odd = g[~nice]
         lines.append("  not split-like (first 8): " + " | ".join(f"{r.Ticker} {r.Date} {r.Detail}" for r in odd.head(8).itertuples()))
+        if data is not None:
+            lines += adjustment_basis(cfg, out, data)
     g = out[out.Kind == "VOLUME_MISMATCH"]
     if len(g):
         lines.append(f"VOLUME_MISMATCH (report only): {len(g)}; median |difference| {float(g.Value.abs().median()):.2f}; top tickers {counts(g.Ticker.value_counts(), top)}")
@@ -350,7 +388,7 @@ def main(argv: list[str] | None = None) -> int:
             path = Path(cfg["paths"]["data"]) / "bhav_crosscheck.csv"
             if not path.exists():
                 raise prep.MissingInput("no bhav_crosscheck.csv: run --crosscheck first")
-            print(summarize(cfg, pd.read_csv(path, dtype={"Ticker": str, "Date": str, "Detail": str}, keep_default_na=False)))
+            print(summarize(cfg, pd.read_csv(path, dtype={"Ticker": str, "Date": str, "Detail": str}, keep_default_na=False), data=prep.load_pit(cfg)))
             return 0
         data = prep.load_pit(cfg)
         out = crosscheck(data.series, load(cfg, set(data.series)), cfg["bhav"]["crosscheck"])
