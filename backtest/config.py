@@ -30,6 +30,8 @@ def validate(cfg: dict) -> None:
         raise ValueError("capital: inr greater than 0 and composition summing to 1.0")
     if cfg["fill"]["mode"] != "open" or not (isinstance(cfg["fill"]["carryOverDays"], int) and cfg["fill"]["carryOverDays"] >= 0):
         raise ValueError("fill: only mode open is supported; carryOverDays an integer of 0 or more")
+    if any(cfg["fill"]["realism"].values()):
+        raise ValueError("fill.realism: bands, volumeCap, circuitLocks and settlementLag are not implemented yet; keep them false")
     sched = cfg["tax"]["schedule"]
     froms = [r["from"] for r in sched]
     if not sched or froms != sorted(set(froms)) or not all(_is_date(d) for d in froms):

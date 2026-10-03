@@ -39,6 +39,9 @@ class ConfigTests(unittest.TestCase):
         self.bad(lambda c: c["stress"].update(x=[["2020-02-01", "2019-01-01"]]))
         self.bad(lambda c: c["compute"].update(workers=9))
 
+    def test_realism_layers_must_stay_off_until_implemented(self):
+        self.bad(lambda c: c["fill"]["realism"].update(bands=True))
+
     def test_unsupported_fill_mode(self):
         self.bad(lambda c: c["fill"].update(mode="vwap"))
 

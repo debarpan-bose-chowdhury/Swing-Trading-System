@@ -35,6 +35,7 @@ class PitData:
     def __init__(self, series: dict[str, pd.DataFrame], index: pd.DataFrame, buckets: dict[str, list[str]]):
         self.series, self.index, self.buckets = series, index, buckets
         self.dates = {k: df.Date.to_numpy() for k, df in series.items()}
+        self.opens = {k: df.Open.to_numpy(float) for k, df in series.items()}
         self._panels: tuple[pd.DataFrame, pd.DataFrame] | None = None
 
     @classmethod
@@ -52,6 +53,11 @@ class PitData:
     def cut(self, key: str, asof: str) -> int:
         """Number of rows of `key` dated on or before asof."""
         return int(np.searchsorted(self.dates[key], asof, side="right"))
+
+    def open_price(self, key: str, day: str) -> float | None:
+        """Raw Open of `key` on `day`, None when the ticker has no row that day."""
+        i = self.cut(key, day) if key in self.dates else 0
+        return float(self.opens[key][i - 1]) if i and self.dates[key][i - 1] == day else None
 
     def bench_close(self, asof: str) -> float | None:
         row = self.index[self.index.Date == asof]
