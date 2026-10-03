@@ -203,17 +203,20 @@ class TuneTests(TreeCase):
 
     def test_a_miss_is_explained_with_the_price_and_volume_it_saw(self):
         text = universe.validate_adjust(self.cfg, self.yahoo, self.raw, pd.DataFrame(columns=links.LINK_COLS))
-        self.assertIn("recall 100%", text)  # volume x2.5 is 50% off x5, but the price landed exactly on 5 and there was no crash spike
-        self.cfg["universe"]["adjust"]["tightTolerance"] = 0.0
+        self.assertIn("recall 100%", text)  # volume x2.5 is within 80% of x5, and the price landed exactly on 5
+        self.cfg["universe"]["adjust"].update(tightTolerance=0.0, volumeTolerance=0.4)
         text = universe.validate_adjust(self.cfg, self.yahoo, self.raw, pd.DataFrame(columns=links.LINK_COLS))
         self.assertIn("recall 0%", text)
         self.assertIn("close x0.200 (factor 5.00, usual 5)", text)
         self.assertIn("volume 1,000 -> 2,500 (x2.50), decided unresolved", text)
 
-    def test_the_sweep_finds_the_settings_that_catch_it(self):
-        text = universe.tune_adjust(self.cfg, self.yahoo, self.raw, pd.DataFrame(columns=links.LINK_COLS))
+    def test_the_sweep_scores_each_setting_against_yahoos_splits(self):
+        from unittest.mock import patch
+        grid = {"volumeTolerance": [0.4, 0.8], "volumeWindow": [10], "niceTolerance": [0.08], "tightTolerance": [0.0, 0.05], "crashSpike": [4.0]}
+        with patch.dict(universe.GRID, grid):
+            text = universe.tune_adjust(self.cfg, self.yahoo, self.raw, pd.DataFrame(columns=links.LINK_COLS))
         rows = [line.split() for line in text.splitlines()[2:]]
         got = {(float(r[0]), float(r[3])): float(r[-1]) for r in rows}  # (volumeTol, tightTol) -> recall
-        self.assertEqual(got[(0.4, 0.0)], 0.0)  # volume x2.5 against x5 is outside 40%, and the price-only rule is off
+        self.assertEqual(got[(0.4, 0.0)], 0.0)  # volume x2.5 against x5 is outside 40% and the price-only rule is off
         self.assertEqual(got[(0.8, 0.0)], 100.0)  # a looser volume test catches it
-        self.assertEqual(got[(0.4, 0.03)], 100.0)  # so does the price-only rule: close x0.200 is exactly 5
+        self.assertEqual(got[(0.4, 0.05)], 100.0)  # so does the price-only rule: close x0.200 is exactly 5
