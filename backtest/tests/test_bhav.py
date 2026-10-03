@@ -21,6 +21,13 @@ def legacy_text(day: str, rows: list[tuple], header=None) -> str:
     return "\n".join([head, *lines]) + "\n"
 
 
+def legacy_2007_text(day: str, rows: list[tuple]) -> str:
+    """The real early layout: no TOTALTRADES or ISIN, and a trailing comma on every line."""
+    d = pd.Timestamp(day).strftime("%d-%b-%Y").upper()
+    lines = [f"{s},{ser},{c},{c},{c},{c},{c},{c},{v},{c * v},{d}," for s, ser, c, v in rows]
+    return "\n".join(["SYMBOL,SERIES,OPEN,HIGH,LOW,CLOSE,LAST,PREVCLOSE,TOTTRDQTY,TOTTRDVAL,TIMESTAMP,", *lines]) + "\n"
+
+
 def udiff_text(day: str, rows: list[tuple]) -> str:
     head = "TradDt,BizDt,Sgmt,Src,FinInstrmTp,FinInstrmId,ISIN,TckrSymb,SctySrs,OpnPric,HghPric,LwPric,ClsPric,LastPric,PrvsClsgPric,TtlTradgVol,TtlTrfVal"
     lines = [f"{day},{day},CM,NSE,STK,1,INE000A01010,{s},{ser},{c},{c},{c},{c},{c},{c},{v},{c * v}" for s, ser, c, v in rows]
@@ -86,6 +93,10 @@ class ParseTests(TreeCase):
         u = bhav.parse(udiff_text("2024-07-09", [("AAA", "EQ", 7.0, 3)]), self.cfg["bhav"]["formats"]["udiff"], keep, "2024-07-09")
         self.assertEqual((u.Ticker[0], u.Close[0], u.Volume[0]), ("AAA", 7.0, 3.0))
 
+    def test_early_files_without_isin_and_with_a_trailing_comma_parse(self):
+        got = bhav.parse(legacy_2007_text("2007-09-17", [("AAA", "EQ", 100.5, 10), ("BBB", "BE", 5.0, 1)]), self.cfg["bhav"]["formats"]["legacy"], ["EQ"], "2007-09-17")
+        self.assertEqual((len(got), got.Ticker[0], got.Close[0], got.Isin[0]), (1, "AAA", 100.5, ""))
+
     def test_missing_columns_are_named_and_a_wrong_date_is_refused(self):
         with self.assertRaisesRegex(ValueError, "CLOSE=|TOTTRDQTY"):
             bhav.parse(legacy_text("2008-01-02", [], header="SYMBOL,SERIES,OPEN,HIGH,LOW,LAST,TIMESTAMP,ISIN"), self.cfg["bhav"]["formats"]["legacy"], ["EQ"])
@@ -98,21 +109,26 @@ class ProbeDownloadTests(TreeCase):
         super().setUp()
         self.cfg = json.loads(json.dumps(CFG))
         self.cfg["paths"].update(data="backtest/data", appConfig="app/config")
-        self.make = lambda day: legacy_text(day, many()) if day < "2024-07-08" else udiff_text(day, many())
+        def make(day):
+            if day >= "2024-07-08":
+                return udiff_text(day, many())
+            return legacy_2007_text(day, many()) if day < "2010" else legacy_text(day, many())  # the real files changed layout over the years
+        self.make = make
         self.cal = Calendar("app/config/nse_calendar.json")
 
     def test_probe_passes_and_unlocks_download(self):
         c = FakeClient(self.cfg, make=self.make)
         res = bhav.probe(self.cfg, c)
         self.assertTrue(res["legacy"]["ok"] and res["udiff"]["ok"])
+        self.assertEqual(len(res["legacy"]["days"]), len(self.cfg["bhav"]["probeDays"]["legacy"]))
         self.assertTrue(bhav.probe_passed(self.cfg))
         self.assertTrue((Path("backtest/data/bhav/samples/legacy_2015-06-02.csv")).exists())
 
     def test_probe_reports_a_bad_mapping_and_keeps_download_locked(self):
-        c = FakeClient(self.cfg, make=lambda day: legacy_text(day, many(), header="SYM,SERIES,OPEN,HIGH,LOW,CLOSE,PREVCLOSE,TIMESTAMP,ISIN") if day < "2024" else udiff_text(day, many()))
+        c = FakeClient(self.cfg, make=lambda day: legacy_text(day, many(), header="SYM,SERIES,OPEN,HIGH,LOW,CLOSE,PREVCLOSE,TIMESTAMP,ISIN") if day < "2024-07-08" else udiff_text(day, many()))
         res = bhav.probe(self.cfg, c)
         self.assertFalse(res["legacy"]["ok"])
-        self.assertIn("symbol=SYMBOL", res["legacy"]["error"])
+        self.assertIn("symbol=SYMBOL", res["legacy"]["days"][0]["error"])
         self.assertFalse(bhav.probe_passed(self.cfg))
         with self.assertRaises(prep.MissingInput):
             bhav.download(self.cfg, c, self.cal, "2024-01-01", "2024-01-05", sleep=lambda s: None)
@@ -135,6 +151,15 @@ class ProbeDownloadTests(TreeCase):
         self.assertTrue((raw / "2024-01-01.csv").exists() and (raw / "2024-01-03.missing").exists() and not (raw / "2024-01-04.csv").exists())
         again = bhav.download(self.cfg, FakeClient(self.cfg, make=self.make), self.cal, "2024-01-01", "2024-01-05", sleep=lambda s: None)
         self.assertEqual((again["fetched"], again["cached"], again["missing"], again["failed"]), (1, 3, 1, []))
+
+    def test_repeated_failures_stop_the_download_and_keep_what_was_cached(self):
+        bhav.probe(self.cfg, FakeClient(self.cfg, make=self.make))
+        bad = lambda day: self.make(day) if day < "2024-01-05" else "not,a,bhavcopy\n1,2,3\n"  # noqa: E731
+        c = FakeClient(self.cfg, make=bad)
+        out = bhav.download(self.cfg, c, self.cal, "2024-01-01", "2024-03-29", sleep=lambda s: None)
+        self.assertTrue(out["aborted"])
+        self.assertEqual((out["fetched"], len(out["failed"])), (4, 10))
+        self.assertEqual(len(c.calls), 1 + 4 + 10)  # home page, the good days, then exactly the allowed failures
 
     def test_unreadable_file_is_never_cached(self):
         bhav.probe(self.cfg, FakeClient(self.cfg, make=self.make))

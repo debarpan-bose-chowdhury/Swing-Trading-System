@@ -33,6 +33,7 @@ from backtest import config, prep
 
 log = logging.getLogger("backtest.bhav")
 NORMAL = ["Ticker", "Date", "Series", "Open", "High", "Low", "Close", "PrevClose", "Volume", "Value", "Isin"]
+OPTIONAL = ("isin",)  # early legacy files (2007) have no ISIN column; nothing downstream needs it
 MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 
 
@@ -87,7 +88,7 @@ def parse(text: str, fmt: dict, keep: list[str], day: str | None = None) -> pd.D
     """Normalised rows (NORMAL columns) of the kept series. Raises ValueError naming every column the mapping expects but the file lacks."""
     df = pd.read_csv(io.StringIO(text), dtype=str, keep_default_na=False)
     df.columns = [c.strip() for c in df.columns]
-    want = {**fmt["columns"], "date": fmt["dateColumn"]}
+    want = {**{k: v for k, v in fmt["columns"].items() if k not in OPTIONAL}, "date": fmt["dateColumn"]}
     missing = [f"{k}={v}" for k, v in want.items() if v not in df.columns]
     if missing:
         raise ValueError(f"columns not found in the file: {', '.join(missing)} (file has {list(df.columns)})")
@@ -95,7 +96,7 @@ def parse(text: str, fmt: dict, keep: list[str], day: str | None = None) -> pd.D
     df = df[df[c["series"]].str.strip().isin(keep)]
     out = pd.DataFrame({
         "Ticker": df[c["symbol"]].str.strip(), "Date": pd.to_datetime(df[fmt["dateColumn"]].str.strip(), format=fmt["dateFormat"]).dt.strftime("%Y-%m-%d"),
-        "Series": df[c["series"]].str.strip(), "Isin": df[c["isin"]].str.strip()})
+        "Series": df[c["series"]].str.strip(), "Isin": df[c["isin"]].str.strip() if c["isin"] in df.columns else ""})
     for k, name in (("open", "Open"), ("high", "High"), ("low", "Low"), ("close", "Close"), ("prevClose", "PrevClose"), ("volume", "Volume"), ("value", "Value")):
         out[name] = pd.to_numeric(df[c[k]].str.replace(",", ""), errors="coerce")
     if day is not None and len(out) and set(out.Date) != {day}:
@@ -105,24 +106,26 @@ def parse(text: str, fmt: dict, keep: list[str], day: str | None = None) -> pd.D
 
 # --- probe -------------------------------------------------------------------------------------------------------
 def probe(cfg: dict, client: BhavClient) -> dict:
-    """Fetch one sample day per format; record whether it downloads and parses with the configured mapping."""
+    """Fetch the sample days of each format (spread over its years); record whether each downloads and parses with the mapping."""
     out = {}
     samples = folder(cfg) / "samples"
     samples.mkdir(parents=True, exist_ok=True)
-    for name, day in cfg["bhav"]["probeDays"].items():
-        fmt = cfg["bhav"]["formats"][name]
-        res = {"day": day, "url": fmt["url"].format(yyyy=day[:4], dd=day[8:], MON=MONTHS[int(day[5:7]) - 1], yyyymmdd=day.replace("-", ""))}
-        try:
-            text = unzip(client.get(res["url"]))
-            (samples / f"{name}_{day}.csv").write_text(text, encoding="utf-8")
-            res["header"] = text.splitlines()[0] if text else ""
-            rows = parse(text, fmt, cfg["bhav"]["seriesKeep"], day)
-            res |= {"ok": len(rows) > 100, "rows": len(rows), "sample": rows.head(3).to_dict("records")}
-            if not res["ok"]:
-                res["error"] = f"only {len(rows)} kept rows"
-        except Exception as e:
-            res |= {"ok": False, "error": repr(e)}
-        out[name] = res
+    for name, days in cfg["bhav"]["probeDays"].items():
+        fmt, results = cfg["bhav"]["formats"][name], []
+        for day in days:
+            res = {"day": day, "url": fmt["url"].format(yyyy=day[:4], dd=day[8:], MON=MONTHS[int(day[5:7]) - 1], yyyymmdd=day.replace("-", ""))}
+            try:
+                text = unzip(client.get(res["url"]))
+                (samples / f"{name}_{day}.csv").write_text(text, encoding="utf-8")
+                res["header"] = text.splitlines()[0] if text else ""
+                rows = parse(text, fmt, cfg["bhav"]["seriesKeep"], day)
+                res |= {"ok": len(rows) > 100, "rows": len(rows), "sample": rows.head(2).to_dict("records")}
+                if not res["ok"]:
+                    res["error"] = f"only {len(rows)} kept rows"
+            except Exception as e:
+                res |= {"ok": False, "error": repr(e)}
+            results.append(res)
+        out[name] = {"ok": all(r["ok"] for r in results), "days": results}
     atomic(folder(cfg) / "probe.json", lambda tmp: tmp.write_text(json.dumps(out, indent=2, default=str), encoding="utf-8"))
     return out
 
@@ -132,7 +135,8 @@ def probe_passed(cfg: dict) -> bool:
     if not path.exists():
         return False
     got = json.loads(path.read_text(encoding="utf-8"))
-    return all(got.get(n, {}).get("ok") for n in cfg["bhav"]["formats"]) and all(got[n]["day"] == cfg["bhav"]["probeDays"][n] for n in got)
+    want = cfg["bhav"]["probeDays"]
+    return all(got.get(n, {}).get("ok") and [r["day"] for r in got[n]["days"]] == want[n] for n in cfg["bhav"]["formats"])
 
 
 # --- download and build ------------------------------------------------------------------------------------------
@@ -144,7 +148,8 @@ def download(cfg: dict, client: BhavClient, cal: Calendar, start: str, end: str,
     raw.mkdir(parents=True, exist_ok=True)
     client.get(cfg["bhav"]["client"]["homeUrl"])  # session cookies
     days = [d.isoformat() for d in cal.days(date.fromisoformat(start), date.fromisoformat(end))]
-    done = {"fetched": 0, "cached": 0, "missing": 0, "failed": []}
+    done = {"fetched": 0, "cached": 0, "missing": 0, "failed": [], "aborted": False}
+    streak, limit = 0, cfg["bhav"]["client"]["abortAfterFailures"]
     for day in days:
         if (raw / f"{day}.csv").exists():
             done["cached"] += 1
@@ -157,12 +162,18 @@ def download(cfg: dict, client: BhavClient, cal: Calendar, start: str, end: str,
             parse(text, cfg["bhav"]["formats"][format_for(cfg, day)], cfg["bhav"]["seriesKeep"], day)  # never cache a file we cannot read
             atomic(raw / f"{day}.csv", lambda tmp, t=text: tmp.write_text(t, encoding="utf-8"))
             done["fetched"] += 1
+            streak = 0
         except NotFound:
             (raw / f"{day}.missing").write_text("404", encoding="utf-8")
             done["missing"] += 1
         except Exception as e:
             log.warning("%s: %r", day, e)
             done["failed"].append(day)
+            streak += 1
+            if streak >= limit:  # a format drift or a block, not a one-off: stop before hammering NSE for thousands of days
+                done["aborted"] = True
+                log.error("%d failures in a row (first: %s); stopping. Fix the cause (see the message above), then re-run: cached days are kept", limit, done["failed"][-limit])
+                return done
         sleep(cfg["bhav"]["client"]["gapSeconds"])
     return done
 
@@ -256,12 +267,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.probe:
             res = probe(cfg, client_for(cfg))
             for name, r in res.items():
-                print(f"{name} {r['day']}: {'OK' if r['ok'] else 'FAILED'} {r.get('error', '')}\n  header: {r.get('header', '')[:200]}")
+                for d in r["days"]:
+                    print(f"{name} {d['day']}: {'OK' if d['ok'] else 'FAILED'} {d.get('error', '')}\n  header: {d.get('header', '')[:160]}")
             return 0 if probe_passed(cfg) else 3
         if args.download:
             cal = Calendar(Path(cfg["paths"]["appConfig"]) / "nse_calendar.json")
             done = download(cfg, client_for(cfg), cal, args.start or cfg["bhav"]["from"], args.end or (date.today() - timedelta(days=1)).isoformat())
-            print(f"bhav: {done['fetched']} fetched, {done['cached']} cached, {done['missing']} missing, {len(done['failed'])} failed {done['failed'][:5]}")
+            print(f"bhav: {done['fetched']} fetched, {done['cached']} cached, {done['missing']} missing, {len(done['failed'])} failed {done['failed'][:5]}"
+                  + (" -- ABORTED after repeated failures" if done["aborted"] else ""))
             return 1 if done["failed"] else 0
         if args.build:
             print(f"bhav: built {build(cfg)}")

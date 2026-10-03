@@ -67,7 +67,8 @@ def validate(cfg: dict) -> None:
             and bh["formats"]["legacy"]["until"] < bh["formats"]["udiff"]["from"]
             and all(set(f["columns"]) == cols and "{" in f["url"] for f in bh["formats"].values())
             and all(_num(bh["crosscheck"][k], 0, 1) for k in ("closeTolerance", "volumeTolerance"))
-            and _num(bh["client"]["gapSeconds"]) and _is_date(bh["probeDays"]["legacy"]) and _is_date(bh["probeDays"]["udiff"])):
+            and _num(bh["client"]["gapSeconds"]) and isinstance(bh["client"]["abortAfterFailures"], int) and bh["client"]["abortAfterFailures"] >= 1
+            and set(bh["probeDays"]) == set(bh["formats"]) and all(days and all(_is_date(d) for d in days) for days in bh["probeDays"].values())):
         raise ValueError("bhav: from/probe dates ISO, seriesKeep non-empty, legacy.until before udiff.from, both formats map every column, tolerances in [0, 1]")
     c = cfg["compute"]
     if not (isinstance(c["workers"], int) and 1 <= c["workers"] <= 8 and isinstance(c["seed"], int)):

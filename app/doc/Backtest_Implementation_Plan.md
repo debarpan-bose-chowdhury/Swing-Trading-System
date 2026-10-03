@@ -154,3 +154,7 @@ Real data: 143 names (all with history), 4,672 index rows, common start 2008-11-
 | 8 parallel runs | n/a (4 cores) | slowest worker 1.41x slower than alone, throughput 5.7x, 16 s to start workers |
 
 That run made 0 fills (Rs 1 lakh cannot meet the live Rs 25,000 minimum order), so it measures targets, the ladder and bookkeeping only. A trading run costs more: on the cloud box trades took a run from 19 to 73 ms per session (3.8x), mostly the stop engine replaying each open position every day. Scaling that to your PC gives an ESTIMATE of about 240 ms per session, 14 minutes per 15-year run, and a 30-point strict gate of about 29 h on one worker or about 5 h on 8 workers. Re-run with `--set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500` for the real figure.
+
+### Phase 7a on your PC: first real result and fix
+
+`--probe` passed for the 2015 legacy and 2024 UDiFF samples (real headers match the configured names). `--download` then failed on every 2007 day: the early legacy layout has no `ISIN` column (and a trailing comma). Fixed: `ISIN` is optional, the probe now checks 4 legacy days (2007-09-17, 2008-01-02, 2015-06-02, 2024-07-05) and 2 UDiFF days, and `--download` stops after 10 consecutive failures (`bhav.client.abortAfterFailures`) instead of walking all 4,600 days. Unreadable files are never cached, so nothing needs cleaning up. Other layout drift between 2008 and 2024 is still possible; the multi-day probe is there to catch it before the long download.
