@@ -51,6 +51,7 @@
   },
   "universe": {
     "mode": "today",
+    "adjustValidated": false,
     "rankWindow": 120,
     "rankMinObs": 60,
     "scopeTop": 250,

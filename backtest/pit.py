@@ -34,9 +34,25 @@ class PitData:
 
     def __init__(self, series: dict[str, pd.DataFrame], index: pd.DataFrame, buckets: dict[str, list[str]]):
         self.series, self.index, self.buckets = series, index, buckets
-        self.dates = {k: df.Date.to_numpy() for k, df in series.items()}
-        self.opens = {k: df.Open.to_numpy(float) for k, df in series.items()}
-        self._panels: tuple[pd.DataFrame, pd.DataFrame] | None = None
+        self.membership = None  # set by add_pit: a point-in-time universe instead of the static buckets
+        self._static = {b: set(s) for b, s in buckets.items()}
+        self._reindex()
+
+    def _reindex(self) -> None:
+        self.dates = {k: df.Date.to_numpy() for k, df in self.series.items()}
+        self.opens = {k: df.Open.to_numpy(float) for k, df in self.series.items()}
+        self._panels = None
+
+    def add_pit(self, extra: dict[str, pd.DataFrame], membership) -> None:
+        """Switch to a point-in-time universe: add the derived series (Yahoo's win a clash) and use the membership for labels."""
+        self.series = {**extra, **self.series}
+        self.membership = membership
+        self.buckets = {b: [] for b in membership.names}
+        self._reindex()
+
+    def members(self, asof: str) -> dict[str, set]:
+        """bucket -> symbols as of a date: the static buckets, or the newest point-in-time membership on or before it."""
+        return self._static if self.membership is None else self.membership.at(asof)
 
     @classmethod
     def load(cls, app_data: str | Path, bucket_names: list[str]) -> "PitData":
@@ -75,6 +91,8 @@ class PitData:
     def data_hash(self) -> str:
         """Content hash of everything the run reads (feeds the trial registry and the determinism test)."""
         h = hashlib.sha256()
+        if self.membership is not None:
+            h.update(self.membership.hash_bytes())
         for key, df in sorted({**self.series, "^" + INDEX_KEY: self.index}.items()):
             h.update(key.encode())
             h.update(pd.util.hash_pandas_object(df, index=False).to_numpy().tobytes())

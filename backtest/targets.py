@@ -30,7 +30,11 @@ class Targets:
         self.dates = list(self.history.date)
         self.active = list(self.history.active_regime)
         adj, value = data.panels()
-        self.panels = {}
+        self.data, self.panels = data, {}
+        if data.membership is not None:  # point-in-time universe: the columns of a bucket change from week to week
+            self.names, self.all = list(data.buckets), (adj, value, adj.index)
+            return
+        self.names = list(data.buckets)
         for b, symbols in data.buckets.items():
             cols = [s for s in symbols if s in adj.columns]
             a = adj[cols].dropna(how="all")  # the union of the tickers' own dates, as selector.load_panel builds it
@@ -51,13 +55,23 @@ class Targets:
         row = self.history[self.history.date == rebalance].iloc[0]
         cfg, active = self.cfg, row.active_regime
         buckets = {}
-        for b, (adj, value, index) in self.panels.items():
+        members = self.data.members(rebalance) if self.data.membership is not None else None
+        for b in self.names:
             strategy = cfg["strategies"].get(active, {}).get(b)
             picks = []
             if strategy and strategy["top_n"] > 0 and cfg["composition"].get(b, 0) > 0:
-                n = index.searchsorted(pd.Timestamp(rebalance), side="right")
-                lo = max(0, n - self.rows)
-                picks, _ = selector.select_bucket(adj.iloc[lo:n], value.iloc[lo:n], rebalance, strategy, active, cfg["selector"])
+                if members is None:
+                    adj, value, index = self.panels[b]
+                    n = index.searchsorted(pd.Timestamp(rebalance), side="right")
+                    lo = max(0, n - self.rows)
+                    a, v = adj.iloc[lo:n], value.iloc[lo:n]
+                else:
+                    adj, value, index = self.all
+                    n = index.searchsorted(pd.Timestamp(rebalance), side="right")
+                    cols = sorted(c for c in members[b] if c in adj.columns)
+                    a = adj.iloc[max(0, n - self.rows):n][cols].dropna(how="all")
+                    v = value.iloc[max(0, n - self.rows):n][cols].loc[a.index]
+                picks, _ = selector.select_bucket(a, v, rebalance, strategy, active, cfg["selector"])
             buckets[b] = {"strategy": strategy, "selected": picks}
         return {"schemaVersion": 1, "status": "ok", "rebalanceDate": rebalance,
                 "regime": {"index": cfg["regime"]["index"], "raw": row.raw_regime, "active": active, "pending": row.pending_regime,

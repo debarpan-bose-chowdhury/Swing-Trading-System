@@ -76,7 +76,7 @@ def validate(cfg: dict) -> None:
             and 1 <= un["rankMinObs"] <= un["rankWindow"] and isinstance(un["scopeTop"], int) and un["scopeTop"] >= 1
             and _num(ad["minMove"], 0.05, 0.9) and _num(ad["niceTolerance"], 0, 0.1) and _num(ad["volumeTolerance"], 0, 0.9)
             and isinstance(ad["volumeWindow"], int) and ad["volumeWindow"] >= 5 and isinstance(ad["minPost"], int) and 1 <= ad["minPost"] <= ad["volumeWindow"]
-            and all(_num(h, 0, 1) for h in un["vanishHaircuts"]) and isinstance(un["excludePattern"], str)
+            and all(_num(h, 0, 1) for h in un["vanishHaircuts"]) and isinstance(un["excludePattern"], str) and isinstance(un["adjustValidated"], bool)
             and (ly is None or (set(ly["fromEnd"]) == {"old", "new", "date"} and isinstance(ly["dateFormat"], str)))):
         raise ValueError("universe: mode today/pit, rankWindow >= 20, 1 <= rankMinObs <= rankWindow, scopeTop >= 1, adjust settings in range, haircuts in [0, 1], "
                          "excludePattern a regex, symbolChange.layout null or {fromEnd: {old, new, date}, dateFormat}")

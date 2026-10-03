@@ -2,6 +2,7 @@
 
   python -m backtest.universe --links                 build symbol_links.csv (ISIN chain + manual + NSE) and symbol_review.csv
   python -m backtest.universe --probe-symbolchange    download NSE's symbol-change file once and print its header (network)
+  python -m backtest.universe --build-pit              rank, price and label the point-in-time universe -> backtest/data/pit/
   python -m backtest.universe --validate-adjust       derive split/dividend-adjusted series from the bhavcopy for today's names and compare with Yahoo
 
 Needs the bhavcopy Parquet files (backtest.bhav --download --build). Outputs go under backtest/data/. Exit codes: 0 ok, 1 failed,
@@ -101,16 +102,31 @@ def validate_adjust(cfg: dict, yahoo: dict[str, pd.DataFrame], raw: pd.DataFrame
         f"large genuine moves kept as they are (volume level unchanged) {cash}; unresolved cuts {len(cut_rows)} {cut_rows[:6]}"])
 
 
+def run_build_pit(cfg: dict) -> str:
+    from backtest import pituniverse
+    data = prep.load_pit({**cfg, "universe": {**cfg["universe"], "mode": "today"}})  # Yahoo's series; the point-in-time layer is what gets built
+    r = pituniverse.build(cfg, data.series, list(data.index.Date))
+    h = r["holesPerDate"]
+    return "\n".join([
+        f"scope: {r['scope']} names ever in the top {cfg['universe']['scopeTop']} at a month end: {r['fromYahoo']} priced from Yahoo, {r['derived']} derived from the bhavcopy, "
+        f"{r['scopeWithoutUsableSeries']} without a usable series",
+        f"unresolved corporate-action breaks (series cut): {r['cuts']} e.g. {r['cutExamples'][:6]}",
+        f"membership: {r['membershipRows']} rows over {r['rebalanceDates']} rebalance dates",
+        f"holes (top-150 slots held by names with no usable series, skipped): mean {h['mean']} per date, max {h['max']}; by year {h['byYear']}"])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="backtest.universe")
     g = parser.add_mutually_exclusive_group(required=True)
-    for flag in ("links", "probe-symbolchange", "validate-adjust"):
+    for flag in ("links", "probe-symbolchange", "validate-adjust", "build-pit"):
         g.add_argument(f"--{flag}", action="store_true")
     args = parser.parse_args(argv)
     try:
         cfg = config.load()
         if args.links:
             print(run_links(cfg))
+        elif args.build_pit:
+            print(run_build_pit(cfg))
         elif args.probe_symbolchange:
             print(probe_symbolchange(cfg, bhav.client_for(cfg)))
         else:

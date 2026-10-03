@@ -83,9 +83,8 @@ def simulate(data: PitData, targets: Targets, risk_cfg: dict, start: str, end: s
     the slow reference the decision-parity test compares with; production runs leave it None.
     """
     cal = Calendar(risk_cfg["paths"]["calendar"])
-    if risk_cfg["buckets"] != list(targets.panels):
-        raise ValueError(f"risk buckets {risk_cfg['buckets']} differ from the universe buckets {list(targets.panels)}")
-    buckets_of = {b: set(s) for b, s in data.buckets.items()}
+    if risk_cfg["buckets"] != list(targets.names):
+        raise ValueError(f"risk buckets {risk_cfg['buckets']} differ from the universe buckets {list(targets.names)}")
     book, mem, store = fillmod.Book(capital), Memory(), PitStore(data)
     carry, rows = carry_over_days, []
     queue: list[dict] = []
@@ -103,7 +102,7 @@ def simulate(data: PitData, targets: Targets, risk_cfg: dict, start: str, end: s
             rebalance = regime.live_rebalance_date(cal, d) == d
             T = targets.build(asof) if rebalance else None
             newest = T or newest
-            ctx = Context(risk_cfg, asof, cal, store, LOG, buckets_of, last_good=last_good, surv=surveillance(asof), rebalance=rebalance, targets=T,
+            ctx = Context(risk_cfg, asof, cal, store, LOG, data.members(asof), last_good=last_good, surv=surveillance(asof), rebalance=rebalance, targets=T,
                           windows={b: e["strategy"]["stock_trend_ma"] for b, e in newest["buckets"].items() if e.get("strategy")} if newest else {})
             now = datetime(d.year, d.month, d.day, 21, 0, tzinfo=IST)
             if reference_dir is None:

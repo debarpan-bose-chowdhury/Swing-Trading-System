@@ -38,6 +38,12 @@ def load_pit(cfg: dict) -> pit.PitData:
     data = pit.PitData.load(app_data, names)
     if not data.series or data.index.empty:
         raise MissingInput(f"no stored prices or no {pit.INDEX_KEY} index under {app_data}/market; run the Ticker Data stages first")
+    if cfg["universe"]["mode"] == "pit":
+        from backtest import pituniverse
+        if not cfg["universe"]["adjustValidated"]:
+            raise MissingInput("universe.mode is 'pit' but universe.adjustValidated is false: run `python -m backtest.universe --validate-adjust`, "
+                               "and set it to true once the derived prices agree with Yahoo")
+        pituniverse.attach(data, cfg)
     return data
 
 
