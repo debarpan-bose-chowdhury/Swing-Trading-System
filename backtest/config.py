@@ -71,13 +71,15 @@ def validate(cfg: dict) -> None:
             and set(bh["probeDays"]) == set(bh["formats"]) and all(days and all(_is_date(d) for d in days) for days in bh["probeDays"].values())):
         raise ValueError("bhav: from/probe dates ISO, seriesKeep non-empty, legacy.until before udiff.from, both formats map every column, tolerances in [0, 1]")
     un = cfg["universe"]
-    sc = un["symbolChange"]["columns"]
+    ly, ad = un["symbolChange"]["layout"], un["adjust"]
     if not (un["mode"] in ("today", "pit") and isinstance(un["rankWindow"], int) and un["rankWindow"] >= 20 and isinstance(un["rankMinObs"], int)
             and 1 <= un["rankMinObs"] <= un["rankWindow"] and isinstance(un["scopeTop"], int) and un["scopeTop"] >= 1
-            and _num(un["adjust"]["quietTolerance"], 0, 0.05) and _num(un["adjust"]["niceTolerance"], 0, 0.1) and _num(un["adjust"]["cashMin"], 0, 1)
-            and all(_num(h, 0, 1) for h in un["vanishHaircuts"]) and (sc is None or all(k in sc for k in ("old", "new", "date", "dateFormat")))):
-        raise ValueError("universe: mode today/pit, rankWindow >= 20, 1 <= rankMinObs <= rankWindow, scopeTop >= 1, adjust tolerances in range, haircuts in [0, 1], "
-                         "symbolChange.columns null or {old, new, date, dateFormat}")
+            and _num(ad["minMove"], 0.05, 0.9) and _num(ad["niceTolerance"], 0, 0.1) and _num(ad["volumeTolerance"], 0, 0.9)
+            and isinstance(ad["volumeWindow"], int) and ad["volumeWindow"] >= 5 and isinstance(ad["minPost"], int) and 1 <= ad["minPost"] <= ad["volumeWindow"]
+            and all(_num(h, 0, 1) for h in un["vanishHaircuts"]) and isinstance(un["excludePattern"], str)
+            and (ly is None or (set(ly["fromEnd"]) == {"old", "new", "date"} and isinstance(ly["dateFormat"], str)))):
+        raise ValueError("universe: mode today/pit, rankWindow >= 20, 1 <= rankMinObs <= rankWindow, scopeTop >= 1, adjust settings in range, haircuts in [0, 1], "
+                         "excludePattern a regex, symbolChange.layout null or {fromEnd: {old, new, date}, dateFormat}")
     c = cfg["compute"]
     if not (isinstance(c["workers"], int) and 1 <= c["workers"] <= 8 and isinstance(c["seed"], int)):
         raise ValueError("compute: workers an integer from 1 to 8, seed an integer")

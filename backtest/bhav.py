@@ -154,14 +154,20 @@ def probe_passed(cfg: dict) -> bool:
 
 
 # --- download and build ------------------------------------------------------------------------------------------
-def download(cfg: dict, client: BhavClient, cal: Calendar, start: str, end: str, sleep=time.sleep) -> dict:
-    """Cache the raw CSV of every trading day in [start, end] not cached yet. A 404 is remembered as a .missing marker."""
+def extra_session_days(cal: Calendar, index_dates: list[str], start: str, end: str) -> list[str]:
+    """Days the benchmark traded that the app calendar calls closed: special sessions it lacks (Muhurat, Budget Sunday, the 2024-03-02
+    test session). Without their files the next day's price move looks like a two-day move."""
+    return sorted(d for d in index_dates if start <= d <= end and not cal.is_trading_day(d))
+
+
+def download(cfg: dict, client: BhavClient, cal: Calendar, start: str, end: str, sleep=time.sleep, extra_days: list[str] | None = None) -> dict:
+    """Cache the raw CSV of every trading day in [start, end] (plus extra_days) not cached yet. A 404 is remembered as a .missing marker."""
     if not probe_passed(cfg):
         raise prep.MissingInput("the bhavcopy probe has not passed for both formats: run `python -m backtest.bhav --probe` and fix the mapping first")
     raw = folder(cfg) / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     client.get(cfg["bhav"]["client"]["homeUrl"])  # session cookies
-    days = [d.isoformat() for d in cal.days(date.fromisoformat(start), date.fromisoformat(end))]
+    days = sorted({d.isoformat() for d in cal.days(date.fromisoformat(start), date.fromisoformat(end))} | set(extra_days or []))
     done = {"fetched": 0, "cached": 0, "missing": 0, "failed": [], "aborted": False}
     streak, limit = 0, cfg["bhav"]["client"]["abortAfterFailures"]
     for day in days:
@@ -435,7 +441,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if probe_passed(cfg) else 3
         if args.download:
             cal = Calendar(Path(cfg["paths"]["appConfig"]) / "nse_calendar.json")
-            done = download(cfg, client_for(cfg), cal, args.start or cfg["bhav"]["from"], args.end or (date.today() - timedelta(days=1)).isoformat())
+            start, end = args.start or cfg["bhav"]["from"], args.end or (date.today() - timedelta(days=1)).isoformat()
+            try:
+                extra = extra_session_days(cal, list(prep.load_pit(cfg).index.Date), start, end)
+            except prep.MissingInput:
+                extra = []  # no price data yet: the calendar alone decides
+            if extra:
+                log.info("%d benchmark sessions are not in the app calendar and will be tried too: %s", len(extra), extra[:8])
+            done = download(cfg, client_for(cfg), cal, start, end, extra_days=extra)
             print(f"bhav: {done['fetched']} fetched, {done['cached']} cached, {done['missing']} missing, {len(done['failed'])} failed {done['failed'][:5]}"
                   + (" -- ABORTED after repeated failures" if done["aborted"] else ""))
             return 1 if done["failed"] else 0

@@ -1,73 +1,83 @@
-"""Corporate-action adjustment of bhavcopy-only names, from NSE's own reference price.
+"""Corporate-action adjustment of bhavcopy-only names, from the price and volume series themselves.
 
-On an ex-date NSE sets that day's PREVCLOSE to the previous close adjusted for the action (split, bonus, dividend, rights). So
-f = PrevClose / last row's Close is the action's price factor, with no external corporate-action file. Each event is classified:
+NSE's bhavcopy PREVCLOSE is NOT adjusted on an ex-date (checked against Yahoo's split table on real data: 0 of 171 splits found
+that way), so a split or bonus has to be recognised from what it does to the tape: the price jumps by a usual factor k AND the
+volume level shifts by the same factor and stays shifted. A crash or a squeeze moves the price just as far but its volume spikes
+and decays. Per day with a price move beyond minMove (30%, i.e. a factor over 1.43):
 
-  quiet       |f - 1| within quietTolerance: nothing happened (rounding).
-  split-like  1/f or f is a usual split/bonus multiplier: the price AND volume history before it is rescaled
-              (Close, Open, High, Low divided by the multiplier, Volume multiplied), like Yahoo's split-adjusted Close.
-  cash-like   0.80 < f < 1 and not split-like (dividend, rights): only AdjClose carries it, like Yahoo's dividend adjustment.
-  unresolved  anything else (a jump up that is no clean consolidation, a fall of 20% or more that is no split): a break.
+  split       price fell by a usual factor k (1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 20, 50, 100, +-niceTolerance) and the median volume of the
+              next volumeWindow sessions is about k times the previous window's (+-volumeTolerance): earlier prices are divided
+              by k, earlier volumes multiplied by k (what Yahoo's split-adjusted Close and Volume do).
+  reverse     the mirror image: price rose by k, volume fell to about 1/k.
+  move        the volume level did not change (ratio between 0.5 and 2): a genuine crash or surge. Kept as it is; cutting at real
+              crashes would delete the very failures a survivorship-free universe needs.
+  unresolved  anything else (big move, volume shifted, no usual factor): the series is cut there; only the part after the LAST
+              such break is kept, so the name is not tradable across it. Every cut is returned for review.
+  pending     fewer than 5 sessions after the move to judge by (the end of the data): left alone.
 
-Unresolved breaks are not guessed at: the series is cut there and only the part after the LAST break is kept, so the name is not
-tradable across it. Every cut is returned for review.
+Moves under 30% (dividends, rights issues, ordinary days) are not adjusted, so AdjClose equals the split-adjusted Close here: a
+dead name's total return is understated by its dividends. Mergers are not adjustments: the swap ratio is not a price factor.
 """
 
 import numpy as np
 import pandas as pd
 
-NICE = (1.1, 1.2, 1.25, 4 / 3, 1.5, 5 / 3, 2, 2.5, 3, 4, 5, 6, 8, 10, 20, 50, 100)
+NICE = (1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 20, 50, 100)
 COLS = ["Ticker", "Date", "Open", "High", "Low", "Close", "AdjClose", "Volume"]
-DEFAULTS = {"quietTolerance": 0.003, "niceTolerance": 0.02, "cashMin": 0.80}
+DEFAULTS = {"minMove": 0.30, "niceTolerance": 0.05, "volumeWindow": 10, "volumeTolerance": 0.40, "minPost": 5}
 
 
-def nice(m: float, tol: float) -> bool:
-    return any(abs(m / n - 1) < tol for n in NICE)
-
-
-def classify(f: float, tol: dict) -> str:
-    if abs(f - 1) <= tol["quietTolerance"]:
-        return "quiet"
-    if f < 1 and nice(1 / f, tol["niceTolerance"]):
-        return "split"
-    if f > 1 and nice(f, tol["niceTolerance"]):
-        return "reverse"  # a consolidation: the multiplier is below 1
-    if tol["cashMin"] < f < 1:
-        return "cash"
-    return "unresolved"
+def nearest_nice(k: float, tol: float) -> float | None:
+    best = min(NICE, key=lambda n: abs(k / n - 1))
+    return best if abs(k / best - 1) <= tol else None
 
 
 def events(df: pd.DataFrame, tol: dict) -> pd.DataFrame:
-    """Date, f, kind of every row whose PrevClose differs from the previous row's Close (df sorted by Date with Close, PrevClose)."""
-    close, prev = df.Close.to_numpy(float), df.PrevClose.to_numpy(float)
-    f = np.ones(len(df))
-    ok = (np.arange(len(df)) > 0) & (prev > 0) & np.isfinite(prev)
-    f[1:] = np.where(ok[1:], prev[1:] / close[:-1], 1.0)
-    rows = [(df.Date.iloc[i], float(f[i]), classify(f[i], tol)) for i in range(1, len(df)) if classify(f[i], tol) != "quiet"]
-    return pd.DataFrame(rows, columns=["Date", "f", "kind"])
+    """Date, r (close / previous close), k (usual factor or NaN), vr (volume ratio after / before), kind for every large move."""
+    close, vol = df.Close.to_numpy(float), df.Volume.to_numpy(float)
+    w, out = tol["volumeWindow"], []
+    floor = 1 / (1 - tol["minMove"])
+    for i in range(1, len(df)):
+        r = close[i] / close[i - 1]
+        k = 1 / r if r < 1 else r
+        if k <= floor:
+            continue
+        pre, post = vol[max(0, i - w):i], vol[i:i + w]
+        if len(post) < tol["minPost"] or len(pre) < tol["minPost"] or np.median(pre) <= 0:
+            out.append((df.Date.iloc[i], r, np.nan, np.nan, "pending"))
+            continue
+        vr = float(np.median(post) / np.median(pre))
+        n = nearest_nice(k, tol["niceTolerance"])
+        if n and r < 1 and abs(vr / n - 1) <= tol["volumeTolerance"]:
+            kind = "split"
+        elif n and r > 1 and abs(vr * n - 1) <= tol["volumeTolerance"]:
+            kind = "reverse"
+        elif 0.5 <= vr <= 2.0:
+            kind = "move"
+        else:
+            kind = "unresolved"
+        out.append((df.Date.iloc[i], r, n if n else np.nan, vr, kind))
+    return pd.DataFrame(out, columns=["Date", "r", "k", "vr", "kind"])
 
 
 def adjust_security(raw: pd.DataFrame, ticker: str, tol: dict | None = None) -> tuple[pd.DataFrame, dict]:
-    """(frame in the stored COLS layout, report) for one security's raw rows (Date, Open, High, Low, Close, PrevClose, Volume)."""
+    """(frame in the stored COLS layout, report) for one security's raw rows (Date, Open, High, Low, Close, Volume)."""
     tol = {**DEFAULTS, **(tol or {})}
-    df = raw.drop_duplicates("Date").sort_values("Date").dropna(subset=["Close"]).reset_index(drop=True)
+    df = raw.drop_duplicates("Date").sort_values("Date").dropna(subset=["Close"])
     df = df[df.Close > 0].reset_index(drop=True)
     ev = events(df, tol)
     cuts = list(ev[ev.kind == "unresolved"].Date)
     if cuts:
         df = df[df.Date >= cuts[-1]].reset_index(drop=True)
         ev = events(df, tol)
-    n = len(df)
-    split_f, all_f = np.ones(n), np.ones(n)
+    factor = np.ones(len(df))  # multiply an earlier row's price by this to put it on the latest share basis
     idx = {d: i for i, d in enumerate(df.Date)}
     for r in ev.itertuples():
-        i = idx[r.Date]
-        all_f[:i] *= r.f
-        if r.kind in ("split", "reverse"):
-            split_f[:i] *= r.f
-    out = pd.DataFrame({
-        "Ticker": ticker, "Date": df.Date.to_numpy(),
-        "Open": df.Open.to_numpy(float) * split_f, "High": df.High.to_numpy(float) * split_f, "Low": df.Low.to_numpy(float) * split_f,
-        "Close": df.Close.to_numpy(float) * split_f, "AdjClose": df.Close.to_numpy(float) * all_f,
-        "Volume": np.rint(df.Volume.to_numpy(float) / split_f).astype("int64")})
-    return out[COLS], {"events": ev, "cutAt": cuts, "rows": n}
+        if r.kind == "split":
+            factor[:idx[r.Date]] /= r.k
+        elif r.kind == "reverse":
+            factor[:idx[r.Date]] *= r.k
+    price = lambda col: df[col].to_numpy(float) * factor  # noqa: E731
+    out = pd.DataFrame({"Ticker": ticker, "Date": df.Date.to_numpy(), "Open": price("Open"), "High": price("High"), "Low": price("Low"),
+                        "Close": price("Close"), "AdjClose": price("Close"), "Volume": np.rint(df.Volume.to_numpy(float) / factor).astype("int64")})
+    return out[COLS], {"events": ev, "cutAt": cuts, "rows": len(df)}

@@ -55,8 +55,10 @@
     "rankMinObs": 60,
     "scopeTop": 250,
     "symbolMap": "backtest/config/symbol_map.csv",
-    "symbolChange": { "url": "https://nsearchives.nseindia.com/content/equities/symbolchange.csv", "columns": null },
-    "adjust": { "quietTolerance": 0.003, "niceTolerance": 0.02, "cashMin": 0.80 },
+    "excludePattern": "-RE\\d*$",
+    "symbolChange": { "url": "https://nsearchives.nseindia.com/content/equities/symbolchange.csv",
+                      "layout": { "fromEnd": { "old": 3, "new": 2, "date": 1 }, "dateFormat": "%d-%b-%Y" } },
+    "adjust": { "minMove": 0.30, "niceTolerance": 0.05, "volumeWindow": 10, "volumeTolerance": 0.40, "minPost": 5 },
     "vanishHaircuts": [0.5, 1.0]
   },
   "compute": { "workers": 8, "seed": 1 },

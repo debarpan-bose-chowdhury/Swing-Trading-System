@@ -303,3 +303,16 @@ class UniverseStatsTests(TreeCase):
         self.assertIn("{'2021': 1}", text)
         self.assertIn("2021: 3 ranked, 2 still trade (67%), 2 are in today's universe; gone e.g. ['DEAD']", text)
         self.assertIn("2022: 3 ranked, 3 still trade (100%)", text)
+
+
+class ExtraSessionTests(TreeCase):
+    def test_benchmark_sessions_missing_from_the_calendar_are_downloaded_too(self):
+        cal = Calendar("app/config/nse_calendar.json")
+        extra = bhav.extra_session_days(cal, ["2025-10-20", "2025-10-21", "2026-02-01", "2026-02-02", "2025-10-18"], "2025-10-01", "2026-12-31")
+        self.assertEqual(extra, ["2025-10-18", "2026-02-01"])  # the two weekend sessions; 10-21 is a weekday the calendar already counts
+        cfg = json.loads(json.dumps(CFG))
+        cfg["paths"].update(data="backtest/data", appConfig="app/config")
+        bhav.probe(cfg, FakeClient(cfg, make=lambda day: legacy_text(day, many()) if day < "2024-07-08" else udiff_text(day, many())))
+        got = bhav.download(cfg, FakeClient(cfg, make=lambda day: udiff_text(day, many())), cal, "2026-01-30", "2026-02-03", sleep=lambda s: None, extra_days=["2026-02-01"])
+        self.assertTrue(Path("backtest/data/bhav/raw/2026-02-01.csv").exists())
+        self.assertEqual(got["fetched"], 4)  # Fri 30th, Sun 1st, Mon 2nd, Tue 3rd

@@ -33,14 +33,24 @@ def manual_links(path: Path) -> pd.DataFrame:
     return pd.DataFrame({"Old": m.Old.str.strip(), "New": m.New.str.strip(), "Date": "", "Source": "MANUAL", "GapDays": 0}, columns=LINK_COLS)
 
 
-def nse_links(path: Path, mapping: dict | None) -> pd.DataFrame:
-    """NSE's symbol-change file with the confirmed column mapping {old, new, date, dateFormat}; empty until the mapping is set."""
-    if not path.exists() or not mapping or not all(mapping.get(k) for k in ("old", "new", "date", "dateFormat")):
+def nse_links(path: Path, layout: dict | None) -> pd.DataFrame:
+    """NSE's symbol-change file. It has no header row and the company name (first field) may contain commas, so fields are counted
+    from the end: layout {"fromEnd": {"old": 3, "new": 2, "date": 1}, "dateFormat": "%d-%b-%Y"}. Empty until a layout is configured."""
+    if not path.exists() or not layout:
         return pd.DataFrame(columns=LINK_COLS)
-    df = pd.read_csv(path, dtype=str, keep_default_na=False)
-    df.columns = [c.strip() for c in df.columns]
-    day = pd.to_datetime(df[mapping["date"]].str.strip(), format=mapping["dateFormat"]).dt.strftime("%Y-%m-%d")
-    return pd.DataFrame({"Old": df[mapping["old"]].str.strip(), "New": df[mapping["new"]].str.strip(), "Date": day, "Source": "NSE", "GapDays": 0}, columns=LINK_COLS)
+    pos = layout["fromEnd"]
+    rows = []
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        parts = [x.strip() for x in line.rsplit(",", max(pos.values()))]
+        if len(parts) <= max(pos.values()):
+            continue
+        n = len(parts)
+        try:
+            day = pd.to_datetime(parts[n - pos["date"]], format=layout["dateFormat"]).strftime("%Y-%m-%d")
+        except ValueError:
+            continue  # a header-like or malformed line
+        rows.append((parts[n - pos["old"]], parts[n - pos["new"]], day, "NSE", 0))
+    return pd.DataFrame(rows, columns=LINK_COLS)
 
 
 def combine(*tables: pd.DataFrame) -> pd.DataFrame:
@@ -71,12 +81,14 @@ def resolve(links: pd.DataFrame) -> dict[str, str]:
     return out
 
 
-def review_list(rows: pd.DataFrame, links: pd.DataFrame, today: str, top: int = 60, window: int = 120) -> pd.DataFrame:
+def review_list(rows: pd.DataFrame, links: pd.DataFrame, today: str, top: int = 60, window: int = 120, exclude: str | None = None) -> pd.DataFrame:
     """Symbols that stopped trading with no link, biggest first by median traded value over their last `window` sessions.
 
     rows: Ticker, Date, Value. These are the candidates for a manual symbol_map.csv row (or real deaths).
     """
     last = rows.groupby("Ticker").Date.max()
+    if exclude:
+        last = last[~last.index.str.contains(exclude, regex=True)]  # rights entitlements and the like are not companies
     cutoff = str((pd.Timestamp(today) - pd.Timedelta(days=30)).date())
     stopped = last[(last < cutoff) & ~last.index.isin(set(links.Old))]
     sub = rows[rows.Ticker.isin(stopped.index)].sort_values(["Ticker", "Date"])

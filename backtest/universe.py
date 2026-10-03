@@ -27,9 +27,9 @@ def build_links(cfg: dict, rows: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFra
     """(links, review list) from the bhavcopy rows (Ticker, Date, Isin, Value) and the configured sources."""
     u = cfg["universe"]
     sc = u["symbolChange"]
-    table = links.combine(links.manual_links(Path(u["symbolMap"])), links.nse_links(data_dir(cfg) / "bhav" / "samples" / "symbolchange.csv", sc["columns"]),
+    table = links.combine(links.manual_links(Path(u["symbolMap"])), links.nse_links(data_dir(cfg) / "bhav" / "samples" / "symbolchange.csv", sc["layout"]),
                           links.isin_links(rows))
-    return table, links.review_list(rows, table, rows.Date.max())
+    return table, links.review_list(rows, table, rows.Date.max(), exclude=u["excludePattern"])
 
 
 def run_links(cfg: dict) -> str:
@@ -49,10 +49,9 @@ def probe_symbolchange(cfg: dict, client) -> str:
     text = bhav.unzip(client.get(sc["url"]))
     path = data_dir(cfg) / "bhav" / "samples" / "symbolchange.csv"
     atomic(path, lambda tmp: tmp.write_text(text, encoding="utf-8"))
-    head = text.splitlines()[:6]
-    return f"saved {path} ({len(text.splitlines())} lines)\nheader: {head[0] if head else ''}\n" + "\n".join(head[1:]) + (
-        "\nNext: put the old/new/date column names and the date format into backtest.json universe.symbolChange.columns, then rerun --links."
-        if not sc["columns"] else "")
+    got = links.nse_links(path, sc["layout"])
+    return (f"saved {path} ({len(text.splitlines())} lines); first lines as they are:\n" + "\n".join(text.splitlines()[:3])
+            + f"\nparsed with the configured layout: {len(got)} links, e.g. " + "; ".join(f"{r.Old}->{r.New} {r.Date}" for r in got.head(3).itertuples()))
 
 
 def validate_adjust(cfg: dict, yahoo: dict[str, pd.DataFrame], raw: pd.DataFrame, table: pd.DataFrame, clean_from: str = "2012-01-01") -> str:
@@ -71,7 +70,7 @@ def validate_adjust(cfg: dict, yahoo: dict[str, pd.DataFrame], raw: pd.DataFrame
             continue
         derived, rep = adjust.adjust_security(g, t, tol)
         ev = rep["events"]
-        cash += int((ev.kind == "cash").sum())
+        cash += int((ev.kind == "move").sum())
         if rep["cutAt"]:
             cut_rows.append((t, rep["cutAt"][-1]))
         d_splits = list(ev[ev.kind.isin(["split", "reverse"])].Date)
@@ -99,7 +98,7 @@ def validate_adjust(cfg: dict, yahoo: dict[str, pd.DataFrame], raw: pd.DataFrame
         f"close within 1% of Yahoo on {100 * within / max(total, 1):.1f}% of {total} ticker-days from {clean_from}; tickers whose median close ratio is off by >2%: {len(off)} {off[:8]}",
         f"volume median ratio off by >10%: {len(vol_off)} {vol_off[:8]}",
         f"split-like events derived {mine}, Yahoo splits {theirs}, matched {matched}; derived but not in Yahoo {len(extra)} {extra[:6]}; Yahoo but not derived {len(missing)} {missing[:6]}",
-        f"cash-like events (dividends/rights) {cash}; unresolved cuts {len(cut_rows)} {cut_rows[:6]}"])
+        f"large genuine moves kept as they are (volume level unchanged) {cash}; unresolved cuts {len(cut_rows)} {cut_rows[:6]}"])
 
 
 def main(argv: list[str] | None = None) -> int:
