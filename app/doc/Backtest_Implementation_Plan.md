@@ -1,5 +1,7 @@
 # Backtest Engine: implementation plan (v1)
 
+> **Current design: `Backtest_Engine_TDD.md`.** This file is the decision history, the real-data findings and the runtime measurements; where they differ, the TDD is right (for example the tests now live in `tests/backtest`, and `universe.mode: "pit"` is built).
+
 Companion to `Backtest Engine.docx` (the TDD). The TDD stays the requirements source; where this plan differs, the difference is listed in section 1 and was decided with you. Written 2026-10-03 from a read of `app/risk/*`, `app/analyst/*`, `app/market/*` and `app/config/*`.
 
 ## 1. Decisions that change the TDD
@@ -57,8 +59,8 @@ backtest/
   report.py             # metrics, stress windows, benchmark, labels ("upper bound, survivorship-biased")
   params.py walkforward.py trials.py overfit.py   # HPO-ready interfaces, no runner
   run.py                # CLI: single run, folds, stress; --check; exit codes 0/1/2/3
-  tests/
 ```
+Tests live in `tests/backtest` (see section 8).
 
 Repo conventions kept: run from the repo root, `--check` first (no network, no writes), exit codes 0 ok, 1 failed, 2 busy, 3 gate not met, `placeholders` gate, nothing printed from `.env`, no orders. `backtest/data/` is added to `.gitignore`. Existing Dockerfiles copy only `app`, so nothing reaches an image.
 

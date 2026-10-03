@@ -19,7 +19,7 @@ Full setup: `app/doc/LOCAL_SETUP.md`.
 - Replay: `app.analyst.signals --as-of YYYY-MM-DD` (read-only)
 
 ## Backtest (sibling `backtest/`, personal use, in progress)
-- Plan: `app/doc/Backtest_Implementation_Plan.md`. Check: `uv run --project backtest python -m backtest.run --check`. Tests: `uv run --project backtest pytest -c backtest/pyproject.toml`.
+- Design: `app/doc/Backtest_Engine_TDD.md`; history: `app/doc/Backtest_Implementation_Plan.md`. Check: `uv run --project backtest python -m backtest.run --check`. Tests: `uv run --project backtest pytest -c backtest/pyproject.toml`.
 - Stages: `backtest.prep --check|--dividends|--scan`, `backtest.run --single|--compare` (--compare: today's names vs point-in-time, with 0/50/100% write-off of names that stop trading), `backtest.surv_proxy --snapshot|--calibrate`, `backtest.bench [--years N --profile --workers K]` (runtime spike), `backtest.bhav --check|--probe|--download|--build|--crosscheck|--summary|--universe-stats` (NSE bhavcopy; needs a passed `--probe` on a machine that can reach NSE). `backtest.universe --links|--probe-symbolchange|--validate-adjust|--tune-adjust|--build-pit` (point-in-time universe groundwork). Parameter bounds: `backtest/config/params.json` (unconfirmed until you set `confirmed`).
 - Reads `app/` and `app/data/` only; never writes them. Not copied into any Docker image.
 

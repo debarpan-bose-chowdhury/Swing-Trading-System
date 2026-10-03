@@ -128,7 +128,20 @@ Claude reads `CLAUDE.md` (commands, order, gotchas) and `.claude/settings.json` 
 Non-interactive: `claude -p "run the metadata pipeline and report health.json"`.
 Keep secrets in `.env`; never paste them into prompts. Claude is configured not to read `.env`.
 
-## 10. Troubleshooting
+## 10. Optional: backtest
+
+The backtest is a separate uv project (`backtest/`) that reads `app/data/` and writes only `backtest/data/`. It needs the pipeline's price history (section 7) first.
+
+```
+uv run --project backtest python -m backtest.run --check
+uv run --project backtest python -m backtest.prep --check
+uv run --project backtest python -m backtest.run --single
+uv run --project backtest pytest -c backtest/pyproject.toml    # offline tests
+```
+
+The point-in-time universe needs NSE bhavcopy downloads (`backtest.bhav --probe` then `--download`, slow and resumable). Full guide: `app/doc/Backtest_Engine_TDD.md`.
+
+## 11. Troubleshooting
 
 | Symptom | Fix |
 |---|---|
