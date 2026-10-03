@@ -152,7 +152,7 @@ def validate_adjust(cfg: dict, yahoo: dict[str, pd.DataFrame], raw: pd.DataFrame
     return "\n".join(lines)
 
 
-GRID = {"volumeTolerance": [0.4, 0.6, 0.8], "volumeWindow": [10, 20], "niceTolerance": [0.05, 0.08]}
+GRID = {"volumeTolerance": [0.4, 0.8], "volumeWindow": [10, 20], "niceTolerance": [0.05, 0.08], "tightTolerance": [0.0, 0.03, 0.05]}
 
 
 def tune_adjust(cfg: dict, yahoo: dict[str, pd.DataFrame], raw: pd.DataFrame, table: pd.DataFrame) -> str:
@@ -160,13 +160,13 @@ def tune_adjust(cfg: dict, yahoo: dict[str, pd.DataFrame], raw: pd.DataFrame, ta
     import itertools
     truth, rows = load_truth(cfg), prepared(raw, table, yahoo)
     out = []
-    for vt, vw, nt in itertools.product(GRID["volumeTolerance"], GRID["volumeWindow"], GRID["niceTolerance"]):
-        tol = {**cfg["universe"]["adjust"], "volumeTolerance": vt, "volumeWindow": vw, "niceTolerance": nt}
+    for vt, vw, nt, tt in itertools.product(GRID["volumeTolerance"], GRID["volumeWindow"], GRID["niceTolerance"], GRID["tightTolerance"]):
+        tol = {**cfg["universe"]["adjust"], "volumeTolerance": vt, "volumeWindow": vw, "niceTolerance": nt, "tightTolerance": tt}
         sc = score_events(tol, rows, truth)
-        out.append((vt, vw, nt, sc["matched"], sc["yahoo"], sc["extra"], sc["cuts"]))
-    t = pd.DataFrame(out, columns=["volumeTolerance", "volumeWindow", "niceTolerance", "matched", "yahooSplits", "falseEvents", "namesCut"])
+        out.append((vt, vw, nt, tt, sc["matched"], sc["yahoo"], sc["extra"], sc["cuts"]))
+    t = pd.DataFrame(out, columns=["volumeTol", "volWindow", "niceTol", "tightTol", "matched", "yahooSplits", "falseEvents", "namesCut"])
     t["recall%"] = (100 * t.matched / t.yahooSplits.clip(lower=1)).round(0)
-    return "recall = share of Yahoo's splits found; falseEvents = found but not in Yahoo (a lower bound on false positives); namesCut = names whose history is cut\n" + \
+    return "recall = share of Yahoo's splits found; falseEvents = found but not in Yahoo (a lower bound on false positives); namesCut = names whose history is cut; tightTol 0 turns the price-only rule off\n" + \
         t.sort_values(["recall%", "falseEvents"], ascending=[False, True]).to_string(index=False)
 
 

@@ -56,6 +56,30 @@ class AdjustTests(TreeCase):
         self.assertEqual(rep["cutAt"], [days[20]])
         self.assertEqual((out.Date.iloc[0], len(out)), (days[20], 20))
 
+    def test_an_exact_factor_is_a_split_even_when_the_volume_barely_moves(self):
+        days = weekdays("2024-01-01", 40)
+        close = np.r_[np.full(20, 200.0), np.full(20, 98.0)]  # 2.04x: within 3% of 2
+        vol = np.r_[np.full(20, 1000.0), np.full(20, 1100.0)]  # large caps often show little change in share volume
+        out, rep = adjust.adjust_security(raw(days, close, vol), "AAA")
+        self.assertEqual(kinds(rep), ["split"])
+        self.assertTrue(np.allclose(out.Close[:20], 100.0) and np.allclose(out.Close[20:], 98.0))  # earlier prices halved; the 2% left over is the day's own move
+
+    def test_the_same_price_move_with_a_one_day_volume_spike_that_fades_is_a_crash(self):
+        days = weekdays("2024-01-01", 40)
+        close = np.r_[np.full(20, 200.0), np.full(20, 98.0)]
+        vol = np.full(40, 1000.0)
+        vol[20] = 9000.0
+        _, rep = adjust.adjust_security(raw(days, close, vol), "AAA")
+        self.assertEqual((kinds(rep), rep["cutAt"]), (["move"], []))
+
+    def test_five_thirds_and_seven_fourths_are_usual_bonus_factors(self):
+        for k in (5 / 3, 1.75):
+            days = weekdays("2024-01-01", 40)
+            close = np.r_[np.full(20, 100.0), np.full(20, 100.0 / k)]
+            vol = np.r_[np.full(20, 1000.0), np.full(20, 1000.0 * k)]
+            _, rep = adjust.adjust_security(raw(days, close, vol), "AAA")
+            self.assertEqual(kinds(rep), ["split"], k)
+
     def test_small_moves_and_the_end_of_the_data_are_left_alone(self):
         days = weekdays("2024-01-01", 30)
         close = np.r_[np.full(15, 100.0), np.full(15, 75.0)]  # -25%: an ordinary (large) day, below the 30% threshold
@@ -179,13 +203,17 @@ class TuneTests(TreeCase):
 
     def test_a_miss_is_explained_with_the_price_and_volume_it_saw(self):
         text = universe.validate_adjust(self.cfg, self.yahoo, self.raw, pd.DataFrame(columns=links.LINK_COLS))
-        self.assertIn("recall 0%", text)  # volume x2.5 is 50% away from x5, beyond the 40% tolerance
+        self.assertIn("recall 100%", text)  # volume x2.5 is 50% off x5, but the price landed exactly on 5 and there was no crash spike
+        self.cfg["universe"]["adjust"]["tightTolerance"] = 0.0
+        text = universe.validate_adjust(self.cfg, self.yahoo, self.raw, pd.DataFrame(columns=links.LINK_COLS))
+        self.assertIn("recall 0%", text)
         self.assertIn("close x0.200 (factor 5.00, usual 5)", text)
         self.assertIn("volume 1,000 -> 2,500 (x2.50), decided unresolved", text)
 
     def test_the_sweep_finds_the_settings_that_catch_it(self):
         text = universe.tune_adjust(self.cfg, self.yahoo, self.raw, pd.DataFrame(columns=links.LINK_COLS))
         rows = [line.split() for line in text.splitlines()[2:]]
-        recall = {(r[0], r[1]): r[-1] for r in rows}
-        self.assertTrue(all(v == "0.0" for (vt, _), v in recall.items() if vt == "0.4"))
-        self.assertTrue(all(v == "100.0" for (vt, _), v in recall.items() if vt in ("0.6", "0.8")))
+        got = {(float(r[0]), float(r[3])): float(r[-1]) for r in rows}  # (volumeTol, tightTol) -> recall
+        self.assertEqual(got[(0.4, 0.0)], 0.0)  # volume x2.5 against x5 is outside 40%, and the price-only rule is off
+        self.assertEqual(got[(0.8, 0.0)], 100.0)  # a looser volume test catches it
+        self.assertEqual(got[(0.4, 0.03)], 100.0)  # so does the price-only rule: close x0.200 is exactly 5

@@ -5,9 +5,12 @@ that way), so a split or bonus has to be recognised from what it does to the tap
 volume level shifts by the same factor and stays shifted. A crash or a squeeze moves the price just as far but its volume spikes
 and decays. Per day with a price move beyond minMove (30%, i.e. a factor over 1.43):
 
-  split       price fell by a usual factor k (1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 20, 50, 100, +-niceTolerance) and the median volume of the
-              next volumeWindow sessions is about k times the previous window's (+-volumeTolerance): earlier prices are divided
-              by k, earlier volumes multiplied by k (what Yahoo's split-adjusted Close and Volume do).
+  split       price fell by a usual factor k (1.5, 5/3, 1.75, 2, 2.5, 3, 4, 5, 6, 8, 10, 20, 50, 100, +-niceTolerance) AND either the
+              median volume of the next volumeWindow sessions is about k times the previous window's (+-volumeTolerance), or the
+              price landed within tightTolerance of the factor and the day does not look like a crash (a one-day volume spike
+              over crashSpike x the normal level that does not last). Real volumes after a split are erratic (checked against
+              Yahoo's split table on real data), but a genuine crash seldom lands within 3% of an exact 2x or 5x. Earlier prices
+              are divided by k, earlier volumes multiplied by k, like Yahoo's split-adjusted Close and Volume.
   reverse     the mirror image: price rose by k, volume fell to about 1/k.
   move        the volume level did not change (ratio between 0.5 and 2): a genuine crash or surge. Kept as it is; cutting at real
               crashes would delete the very failures a survivorship-free universe needs.
@@ -22,9 +25,9 @@ dead name's total return is understated by its dividends. Mergers are not adjust
 import numpy as np
 import pandas as pd
 
-NICE = (1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 20, 50, 100)
+NICE = (1.5, 5 / 3, 1.75, 2, 2.5, 3, 4, 5, 6, 8, 10, 20, 50, 100)
 COLS = ["Ticker", "Date", "Open", "High", "Low", "Close", "AdjClose", "Volume"]
-DEFAULTS = {"minMove": 0.30, "niceTolerance": 0.05, "volumeWindow": 10, "volumeTolerance": 0.40, "minPost": 5}
+DEFAULTS = {"minMove": 0.30, "niceTolerance": 0.05, "volumeWindow": 10, "volumeTolerance": 0.40, "minPost": 5, "tightTolerance": 0.03, "crashSpike": 4.0}
 
 
 def nearest_nice(k: float, tol: float) -> float | None:
@@ -46,12 +49,14 @@ def events(df: pd.DataFrame, tol: dict) -> pd.DataFrame:
         if len(post) < tol["minPost"] or len(pre) < tol["minPost"] or np.median(pre) <= 0:
             out.append((df.Date.iloc[i], r, np.nan, np.nan, "pending"))
             continue
-        vr = float(np.median(post) / np.median(pre))
+        pre_med = float(np.median(pre))
+        vr = float(np.median(post) / pre_med)
         n = nearest_nice(k, tol["niceTolerance"])
-        if n and r < 1 and abs(vr / n - 1) <= tol["volumeTolerance"]:
-            kind = "split"
-        elif n and r > 1 and abs(vr * n - 1) <= tol["volumeTolerance"]:
-            kind = "reverse"
+        tight = bool(n) and tol["tightTolerance"] > 0 and abs(k / n - 1) <= tol["tightTolerance"]  # 0 turns the price-only rule off
+        crash = vol[i] > tol["crashSpike"] * pre_med and vr < 1.5  # a one-day volume spike that does not stay: news, not a share-count change
+        vol_ok = bool(n) and (abs(vr / n - 1) <= tol["volumeTolerance"] if r < 1 else abs(vr * n - 1) <= tol["volumeTolerance"])
+        if n and (vol_ok or (tight and not crash)):
+            kind = "split" if r < 1 else "reverse"
         elif 0.5 <= vr <= 2.0:
             kind = "move"
         else:
