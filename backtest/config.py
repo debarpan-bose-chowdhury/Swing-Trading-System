@@ -47,6 +47,9 @@ def validate(cfg: dict) -> None:
     for name, spans in cfg["stress"].items():
         if not spans or not all(len(s) == 2 and _is_date(s[0]) and _is_date(s[1]) and s[0] <= s[1] for s in spans):
             raise ValueError(f"stress.{name}: a list of [start, end] ISO date pairs, start not after end")
+    pr = cfg["prep"]
+    if not (_is_date(pr["dividendsFrom"]) and _num(pr["bigMovePct"], 0, 1) and _num(pr["dividendStepMin"], 0, 1) and _num(pr["dividendTolerance"], 0, 1)):
+        raise ValueError("prep: dividendsFrom an ISO date; bigMovePct, dividendStepMin, dividendTolerance in [0, 1]")
     c = cfg["compute"]
     if not (isinstance(c["workers"], int) and 1 <= c["workers"] <= 8 and isinstance(c["seed"], int)):
         raise ValueError("compute: workers an integer from 1 to 8, seed an integer")
