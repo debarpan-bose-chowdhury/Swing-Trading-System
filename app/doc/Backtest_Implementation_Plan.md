@@ -170,3 +170,15 @@ That run made 0 fills (Rs 1 lakh cannot meet the live Rs 25,000 minimum order), 
 | Strict gate, 30 tried points (130 simulations) | 12.7 h on one worker; about 6.7 h at the measured 1.9x throughput (1.6 h only at ideal scaling) |
 
 The poor scaling is not seen on the 4-core cloud box (4 workers: 1.0x slowdown), so something on the PC saturates: candidates are thread pools of pandas/Arrow/BLAS oversubscribing 12 threads, fewer physical cores than threads, memory bandwidth, or power/thermal limits. `bench` now sets one native thread per worker by default (`--no-limit-threads` to compare) and `--scaling 1,2,4,6,8` sweeps worker counts on a 2-year window to find the best count; the strict-gate projection uses the best throughput it measured.
+
+### Parallel scaling on your PC (12 threads), `bench --scaling 1,2,4,6,8`, 2-year window, 395 fills
+
+| Workers | One native thread per worker | Default native pools |
+|---|---|---|
+| 1 | 0.99x, 1.0x | 1.00x, 1.0x |
+| 2 | 0.98x, 2.0x | 2.21x, 0.9x |
+| 4 | 1.13x, 3.6x | 1.91x, 2.1x |
+| 6 | 1.32x, 4.6x | 4.21x, 1.4x |
+| 8 | 1.55x, 5.1x | 3.61x, 2.2x |
+
+(slowdown of the slowest worker, throughput). Decision: every process pool uses `backtest/workers.py` (`limit_threads()` in the parent, `init_worker()` in each worker). At 8 workers the strict gate (30 tried points, 130 simulations) is projected at 2.6 h instead of 5.9 h; one worker needs 13 h. A single 14.8-year run is about 6 minutes (104 ms per session). The gain from 6 to 8 workers is small, so 10 or 12 workers will probably add little (not measured).

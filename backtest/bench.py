@@ -19,7 +19,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 import pandas as pd
 
-from backtest import config, params, prep, replay, walkforward, world
+from backtest import config, params, prep, replay, walkforward, workers, world
 from backtest.targets import Targets
 
 _WORLD: world.World | None = None
@@ -38,21 +38,10 @@ def _with_point(w: world.World, schema: params.Schema, point: dict) -> world.Wor
     return world.World(w.cfg, risk, analyst, w.data, Targets(w.data, analyst), w.dividends, w.surveillance)
 
 
-THREAD_ENV = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS", "ARROW_NUM_THREADS")
-
-
-def limit_threads() -> None:
-    """One native thread per process: with N worker processes, pandas/Arrow/BLAS pools of their own would oversubscribe the cores."""
-    for k in THREAD_ENV:
-        os.environ[k] = "1"  # inherited by workers started afterwards
-
-
 def _init_worker(point: dict, single_thread: bool = True) -> None:
     global _WORLD
     if single_thread:
-        import pyarrow
-        pyarrow.set_cpu_count(1)
-        pyarrow.set_io_thread_count(1)
+        workers.init_worker()
     w = world.World.build(config.load())
     _WORLD = _with_point(w, params.Schema.load(w.cfg["paths"]["params"], w.risk, w.analyst), point)
 
@@ -113,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         cfg = config.load()
         single_thread = not args.no_limit_threads
         if single_thread:
-            limit_threads()
+            workers.limit_threads()
         if args.scaling and args.years is None:
             args.years = 2.0
         t0 = time.perf_counter()

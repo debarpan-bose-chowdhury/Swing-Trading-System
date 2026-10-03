@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from backtest import bench, walkforward
+from backtest import bench, walkforward, workers
 from backtest.tests.test_params_walkforward import BT, schema
 
 
@@ -46,10 +46,10 @@ class SetParsing(unittest.TestCase):
 class Threads(unittest.TestCase):
     def test_limit_threads_sets_every_native_pool_to_one(self):
         import os
-        saved = {k: os.environ.get(k) for k in bench.THREAD_ENV}
+        saved = {k: os.environ.get(k) for k in workers.THREAD_ENV}
         try:
-            bench.limit_threads()
-            self.assertTrue(all(os.environ[k] == "1" for k in bench.THREAD_ENV))
+            workers.limit_threads()
+            self.assertTrue(all(os.environ[k] == "1" for k in workers.THREAD_ENV))
         finally:
             for k, v in saved.items():
                 os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
