@@ -139,9 +139,9 @@ class ValidateTests(TreeCase):
         pd.DataFrame({"Ticker": ["AAA"], "ExDate": [days[60]], "Ratio": [2.0]}).to_csv("backtest/data/splits.csv", index=False)
         text = universe.validate_adjust(self.cfg, {"AAA": y}, r, pd.DataFrame(columns=links.LINK_COLS))
         self.assertIn("close within 1% of Yahoo on 100.0%", text)
-        self.assertIn("split-like events derived 1, Yahoo splits 1, matched 1; derived but not in Yahoo 0", text)
+        self.assertIn("matched 1 (recall 100%), derived but not in Yahoo 0", text)
         self.assertIn("volume median ratio off by >10%: 0", text)
-        self.assertIn("unresolved cuts 0", text)
+        self.assertIn("names cut at an unresolved break 0", text)
 
 
 class CliTests(TreeCase):
@@ -159,3 +159,33 @@ class CliTests(TreeCase):
         self.assertIn("GONE last", text)
         self.assertEqual(pd.read_csv("backtest/data/symbol_links.csv").Old.tolist(), ["OLD"])
         self.assertTrue(Path("backtest/data/symbol_review.csv").exists())
+
+
+class TuneTests(TreeCase):
+    def setUp(self):
+        super().setUp()
+        self.cfg = config.load(REPO / "backtest/config/backtest.json")
+        self.cfg["paths"]["data"] = "backtest/data"
+        days = weekdays("2012-01-02", 200)
+        self.days = days
+        close = np.r_[np.full(100, 200.0), np.full(100, 40.0)]  # a 5:1 split whose volume only rises 2.5x in the following window
+        vol = np.r_[np.full(100, 1000.0), np.full(100, 2500.0)]
+        r = raw(days, close, vol)
+        r.insert(0, "Ticker", "AAA")
+        self.raw = r
+        Path("backtest/data").mkdir(parents=True)
+        pd.DataFrame({"Ticker": ["AAA"], "ExDate": [days[100]], "Ratio": [5.0]}).to_csv("backtest/data/splits.csv", index=False)
+        self.yahoo = {"AAA": bars("AAA", days, np.full(200, 40.0), volume=2500)}
+
+    def test_a_miss_is_explained_with_the_price_and_volume_it_saw(self):
+        text = universe.validate_adjust(self.cfg, self.yahoo, self.raw, pd.DataFrame(columns=links.LINK_COLS))
+        self.assertIn("recall 0%", text)  # volume x2.5 is 50% away from x5, beyond the 40% tolerance
+        self.assertIn("close x0.200 (factor 5.00, usual 5)", text)
+        self.assertIn("volume 1,000 -> 2,500 (x2.50), decided unresolved", text)
+
+    def test_the_sweep_finds_the_settings_that_catch_it(self):
+        text = universe.tune_adjust(self.cfg, self.yahoo, self.raw, pd.DataFrame(columns=links.LINK_COLS))
+        rows = [line.split() for line in text.splitlines()[2:]]
+        recall = {(r[0], r[1]): r[-1] for r in rows}
+        self.assertTrue(all(v == "0.0" for (vt, _), v in recall.items() if vt == "0.4"))
+        self.assertTrue(all(v == "100.0" for (vt, _), v in recall.items() if vt in ("0.6", "0.8")))

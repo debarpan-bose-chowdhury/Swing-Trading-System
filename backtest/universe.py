@@ -3,6 +3,7 @@
   python -m backtest.universe --links                 build symbol_links.csv (ISIN chain + manual + NSE) and symbol_review.csv
   python -m backtest.universe --probe-symbolchange    download NSE's symbol-change file once and print its header (network)
   python -m backtest.universe --build-pit              rank, price and label the point-in-time universe -> backtest/data/pit/
+  python -m backtest.universe --tune-adjust            score a grid of detector settings against Yahoo's splits
   python -m backtest.universe --validate-adjust       derive split/dividend-adjusted series from the bhavcopy for today's names and compare with Yahoo
 
 Needs the bhavcopy Parquet files (backtest.bhav --download --build). Outputs go under backtest/data/. Exit codes: 0 ok, 1 failed,
@@ -55,34 +56,77 @@ def probe_symbolchange(cfg: dict, client) -> str:
             + f"\nparsed with the configured layout: {len(got)} links, e.g. " + "; ".join(f"{r.Old}->{r.New} {r.Date}" for r in got.head(3).itertuples()))
 
 
-def validate_adjust(cfg: dict, yahoo: dict[str, pd.DataFrame], raw: pd.DataFrame, table: pd.DataFrame, clean_from: str = "2012-01-01") -> str:
-    """Derive adjusted series from the raw bhavcopy for names Yahoo also has, and compare. Dates before clean_from are skipped (Yahoo's 2007-09 closes are noisy)."""
-    tol = cfg["universe"]["adjust"]
+def load_truth(cfg: dict) -> dict[str, pd.DataFrame]:
+    """Yahoo's split table per ticker (ExDate, Ratio), the ground truth for the names Yahoo covers."""
+    path = data_dir(cfg) / "splits.csv"
+    if not path.exists():
+        return {}
+    ys = pd.read_csv(path, dtype={"Ticker": str, "ExDate": str})
+    return {t: g.reset_index(drop=True) for t, g in ys.groupby("Ticker")}
+
+
+def prepared(raw: pd.DataFrame, table: pd.DataFrame, names) -> dict[str, pd.DataFrame]:
+    """raw bhavcopy rows per final symbol (renames merged), for the given names."""
     final = links.resolve(table)
-    raw = raw.assign(Ticker=raw.Ticker.map(lambda t: final.get(t, t)))
-    splits_path = data_dir(cfg) / "splits.csv"
-    ys = pd.read_csv(splits_path, dtype={"Ticker": str, "ExDate": str}) if splits_path.exists() else pd.DataFrame(columns=["Ticker", "ExDate"])
-    ysplit = {t: list(g.ExDate) for t, g in ys.groupby("Ticker")}
-    within, total, off, vol_off, mine, theirs, matched, cut_rows = 0, 0, [], [], 0, 0, 0, []
-    extra, missing, cash = [], [], 0
-    for t, y in yahoo.items():
-        g = raw[raw.Ticker == t]
+    r = raw.assign(Ticker=raw.Ticker.map(lambda t: final.get(t, t)))
+    r = r[r.Ticker.isin(set(names))]
+    return {t: g.sort_values(["Date"]).drop_duplicates("Date", keep="last") for t, g in r.groupby("Ticker")}
+
+
+def score_events(tol: dict, rows: dict[str, pd.DataFrame], truth: dict[str, pd.DataFrame]) -> dict:
+    """Event-level agreement with Yahoo's splits: matched, missed, extra (derived but not in Yahoo), cuts, and details of the misses."""
+    matched = extra = cuts = n_true = 0
+    missed, extras, cut_list = [], [], []
+    for t, g in rows.items():
         if len(g) < 30:
             continue
         derived, rep = adjust.adjust_security(g, t, tol)
-        ev = rep["events"]
-        cash += int((ev.kind == "move").sum())
-        if rep["cutAt"]:
-            cut_rows.append((t, rep["cutAt"][-1]))
-        d_splits = list(ev[ev.kind.isin(["split", "reverse"])].Date)
-        mine += len(d_splits)
-        theirs += len(ysplit.get(t, []))
-        for d in d_splits:
-            if bhav.near(d, ysplit.get(t, [])):
+        mine = list(rep["events"][rep["events"].kind.isin(["split", "reverse"])].Date)
+        yahoo = [d for d in (truth[t].ExDate if t in truth else []) if d >= derived.Date.min()]
+        n_true += len(yahoo)
+        for d in mine:
+            if bhav.near(d, yahoo):
                 matched += 1
             else:
-                extra.append((t, d))
-        missing += [(t, d) for d in ysplit.get(t, []) if not bhav.near(d, d_splits) and d >= derived.Date.min()]
+                extras.append((t, d))
+        for d in yahoo:
+            if not bhav.near(d, mine):
+                missed.append((t, d))
+        if rep["cutAt"]:
+            cuts += 1
+            cut_list.append((t, rep["cutAt"][-1]))
+    return {"matched": matched, "yahoo": n_true, "extra": len(extras), "cuts": cuts, "missed": missed, "extras": extras, "cutList": cut_list}
+
+
+def explain_miss(g: pd.DataFrame, day: str, tol: dict, yahoo_ratio) -> str:
+    """What the tape looked like around a split Yahoo knows and the detector missed: price move, usual factor, volume shift, decision."""
+    g = g.reset_index(drop=True)
+    i = int(np.searchsorted(g.Date.to_numpy(), day))
+    if not 0 < i < len(g):
+        return f"{day}: outside the bhavcopy range"
+    close, vol = g.Close.to_numpy(float), g.Volume.to_numpy(float)
+    r = close[i] / close[i - 1]
+    k = 1 / r if r < 1 else r
+    w = tol["volumeWindow"]
+    pre, post = np.median(vol[max(0, i - w):i]), np.median(vol[i:i + w])
+    ev = adjust.events(g, tol)
+    kind = ev[ev.Date == g.Date.iloc[i]].kind.tolist()
+    return (f"{g.Date.iloc[i]} Yahoo ratio {yahoo_ratio}: close x{r:.3f} (factor {k:.2f}, usual {adjust.nearest_nice(k, tol['niceTolerance'])}), "
+            f"volume {pre:,.0f} -> {post:,.0f} (x{post / pre if pre else float('nan'):.2f}), decided {kind[0] if kind else 'no move over the threshold'}")
+
+
+def validate_adjust(cfg: dict, yahoo: dict[str, pd.DataFrame], raw: pd.DataFrame, table: pd.DataFrame, clean_from: str = "2012-01-01") -> str:
+    """Derive adjusted series from the raw bhavcopy for names Yahoo also has, and compare. Dates before clean_from are skipped (Yahoo's 2007-09 closes are noisy)."""
+    tol = cfg["universe"]["adjust"]
+    truth, rows = load_truth(cfg), prepared(raw, table, yahoo)
+    sc = score_events(tol, rows, truth)
+    within, total, off, vol_off, moves = 0, 0, [], [], 0
+    for t, y in yahoo.items():
+        g = rows.get(t)
+        if g is None or len(g) < 30:
+            continue
+        derived, rep = adjust.adjust_security(g, t, tol)
+        moves += int((rep["events"].kind == "move").sum())
         m = derived.merge(y, on="Date", suffixes=("_d", "_y"))
         m = m[m.Date >= clean_from]
         if len(m) < 20:
@@ -95,11 +139,35 @@ def validate_adjust(cfg: dict, yahoo: dict[str, pd.DataFrame], raw: pd.DataFrame
         vr = (m.Volume_d / m.Volume_y.replace(0, np.nan)).median()
         if np.isfinite(vr) and abs(vr - 1) > 0.10:
             vol_off.append((t, round(float(vr), 2)))
-    return "\n".join([
+    recall = sc["matched"] / max(sc["yahoo"], 1)
+    lines = [
         f"close within 1% of Yahoo on {100 * within / max(total, 1):.1f}% of {total} ticker-days from {clean_from}; tickers whose median close ratio is off by >2%: {len(off)} {off[:8]}",
         f"volume median ratio off by >10%: {len(vol_off)} {vol_off[:8]}",
-        f"split-like events derived {mine}, Yahoo splits {theirs}, matched {matched}; derived but not in Yahoo {len(extra)} {extra[:6]}; Yahoo but not derived {len(missing)} {missing[:6]}",
-        f"large genuine moves kept as they are (volume level unchanged) {cash}; unresolved cuts {len(cut_rows)} {cut_rows[:6]}"])
+        f"splits: Yahoo {sc['yahoo']} in range, matched {sc['matched']} (recall {100 * recall:.0f}%), derived but not in Yahoo {sc['extra']} {sc['extras'][:6]}",
+        f"large genuine moves kept as they are (volume level unchanged) {moves}; names cut at an unresolved break {sc['cuts']} {sc['cutList'][:6]}",
+        "missed splits, what the tape showed (first 12):"]
+    ratio = {t: dict(zip(g.ExDate, g.Ratio)) for t, g in truth.items()}
+    for t, d in sorted(sc["missed"], key=lambda x: x[1])[:12]:
+        lines.append(f"  {t} " + explain_miss(rows[t], d, tol, ratio.get(t, {}).get(d)))
+    return "\n".join(lines)
+
+
+GRID = {"volumeTolerance": [0.4, 0.6, 0.8], "volumeWindow": [10, 20], "niceTolerance": [0.05, 0.08]}
+
+
+def tune_adjust(cfg: dict, yahoo: dict[str, pd.DataFrame], raw: pd.DataFrame, table: pd.DataFrame) -> str:
+    """Score a grid of detector settings against Yahoo's splits: recall, false events, names cut. Writes nothing to config."""
+    import itertools
+    truth, rows = load_truth(cfg), prepared(raw, table, yahoo)
+    out = []
+    for vt, vw, nt in itertools.product(GRID["volumeTolerance"], GRID["volumeWindow"], GRID["niceTolerance"]):
+        tol = {**cfg["universe"]["adjust"], "volumeTolerance": vt, "volumeWindow": vw, "niceTolerance": nt}
+        sc = score_events(tol, rows, truth)
+        out.append((vt, vw, nt, sc["matched"], sc["yahoo"], sc["extra"], sc["cuts"]))
+    t = pd.DataFrame(out, columns=["volumeTolerance", "volumeWindow", "niceTolerance", "matched", "yahooSplits", "falseEvents", "namesCut"])
+    t["recall%"] = (100 * t.matched / t.yahooSplits.clip(lower=1)).round(0)
+    return "recall = share of Yahoo's splits found; falseEvents = found but not in Yahoo (a lower bound on false positives); namesCut = names whose history is cut\n" + \
+        t.sort_values(["recall%", "falseEvents"], ascending=[False, True]).to_string(index=False)
 
 
 def run_build_pit(cfg: dict) -> str:
@@ -118,7 +186,7 @@ def run_build_pit(cfg: dict) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="backtest.universe")
     g = parser.add_mutually_exclusive_group(required=True)
-    for flag in ("links", "probe-symbolchange", "validate-adjust", "build-pit"):
+    for flag in ("links", "probe-symbolchange", "validate-adjust", "tune-adjust", "build-pit"):
         g.add_argument(f"--{flag}", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -133,7 +201,8 @@ def main(argv: list[str] | None = None) -> int:
             data = prep.load_pit(cfg)
             path = data_dir(cfg) / "symbol_links.csv"
             table = pd.read_csv(path, dtype=str, keep_default_na=False) if path.exists() else pd.DataFrame(columns=links.LINK_COLS)
-            print(validate_adjust(cfg, data.series, bhav.load(cfg), table))
+            raw = bhav.load(cfg, set(data.series) | set(table.Old))
+            print(tune_adjust(cfg, data.series, raw, table) if args.tune_adjust else validate_adjust(cfg, data.series, raw, table))
         return 0
     except prep.MissingInput as e:
         print(f"universe: {e}", file=sys.stderr)
