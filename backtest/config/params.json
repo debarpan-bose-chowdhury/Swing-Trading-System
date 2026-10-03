@@ -1,5 +1,5 @@
 {
- "confirmed": false,
+ "confirmed": true,
  "note": "PROPOSED bounds around the live defaults. Edit freely, then set confirmed to true; the overfitting gate refuses to run until you do.",
  "constraints": [
   {
