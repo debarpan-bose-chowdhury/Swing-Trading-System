@@ -122,3 +122,16 @@ Deviations from sections 1 to 7, all decided with you or forced by the code:
 - **Common start:** index row `smaSlow high + 9 + 5 x persistenceWeeks high` (about early 2009 with the proposed bounds).
 - **Parameter bounds** in `backtest/config/params.json` are PROPOSED around the live defaults (`confirmed: false`); `Session.gate_report` refuses to run until you review them and set `confirmed` to true. `minNewOrderInr` and `minAdjustmentInr` live values (25,000 / 10,000) lie outside the proposed bounds, so their default point is clipped to the bound.
 - **Charges, dividends tax, bhavcopy cross-check** are unchanged from section 1; the bhavcopy parsers are still to be built before the golden file.
+
+### Runtime spike (Phase 6): first numbers, synthetic world at real scale
+
+`python -m backtest.bench` times the judge on whatever is in `app/data`. These figures come from a synthetic 148-name, 4,957-row world on a 4-core cloud box, NOT your data or PC; re-run it there (`--workers 8`) before deciding on the screener.
+
+| Measure | Result |
+|---|---|
+| Build (load prices, regime, panels) | 2.7 s, about 350 MB per process |
+| One run over the tuning region (15 years, 3,896 sessions) | 286 s = 73 ms per session = 18.5 s per simulated year |
+| 4 runs in parallel processes | 1.00x per worker, throughput 4.0x (no contention) |
+| Strict gate, 30 tried points (134 simulations, 1,791 simulated years) | 9.2 h on one worker, about 1.1 h on 8 workers at ideal scaling |
+
+Where the time goes: about 85% is inside the app's own `decide()`, mostly `monitor.holdings` replaying `stops.stop_path` from each position's track start every day (about 7 open positions per day). Arrow-backed Date strings are not the cause (object dtype saved 4%). Cutting it needs either an incremental stop path (not bit-identical to the app's rolling mean, so the exact-parity tests would need a tolerance) or the screener tier; neither is built.
