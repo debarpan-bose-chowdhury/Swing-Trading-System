@@ -11,6 +11,7 @@ Mirrored on purpose, including its quirks:
   (a STOP repeats daily until the position is gone);
 - a signal is retried for `carryOverDays` calendar days when the ticker has no Open, then dropped;
 - the book is average-cost with the entry date of the first buy, like app.analyst.ledger.replay.
+- vanish() sells a position whose ticker has no more rows at its last close less a haircut (a merger, a delisting): there is no Open to fill at.
 Realism layers (price bands, volume cap, circuit locks, settlement lag) are not here yet.
 """
 
@@ -99,3 +100,24 @@ def execute(book: Book, c: dict, asof: str, signals: list[dict], open_price, car
     book.fills += new
     book.cash = round(cash, 2)
     return new, list(dict.fromkeys(warnings)), cash
+
+
+def vanish(book: Book, asof: str, ended, last_close, haircut: float) -> list[dict]:
+    """Close every position whose ticker stopped trading before asof, at its last close x (1 - haircut) and without charges.
+
+    ended(ticker) is True when the ticker's series ended before asof; last_close(ticker) is its final raw Close. The proceeds go to cash
+    and the exit is a SELL fill, so tax and the reports see it like any other sale. Returns the exits (the fills plus lastClose, haircut).
+    """
+    out = []
+    for t in sorted(book.pos):
+        if not ended(t):
+            continue
+        qty, last = int(book.pos[t]["qty"]), last_close(t)
+        bucket = next((f["bucket"] for f in reversed(book.fills) if f["ticker"] == t and f["side"] == "BUY"), "")
+        f = {"trade_date": asof, "ticker": t, "bucket": bucket, "side": "SELL", "qty": qty, "price": round(last * (1 - haircut), 4), "charges": 0.0}
+        book._apply(f)
+        book.last_fill[(t, "SELL")] = asof
+        book.fills.append(f)
+        book.cash = round(book.cash + qty * f["price"], 2)
+        out.append(f | {"lastClose": last, "haircut": haircut})
+    return out

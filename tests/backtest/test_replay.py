@@ -118,3 +118,53 @@ class Seams(Replay):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VanishedNames(Replay):
+    def setUp(self):
+        super().setUp()
+        base = self.sim()
+        buys = base.fills[base.fills.side == "BUY"]
+        sells = base.fills[base.fills.side == "SELL"]
+        for f in buys.itertuples():
+            i = self.days.index(f.trade_date)
+            if i + 6 < self.days.index(self.end) and not ((sells.ticker == f.ticker) & (sells.trade_date <= self.days[i + 6])).any():
+                self.ticker, self.last = f.ticker, self.days[i + 2]
+                break
+        else:
+            self.fail("no buy that is held for a week in the synthetic run")
+        series = copy.deepcopy(self.data.series)
+        series[self.ticker] = series[self.ticker][series[self.ticker].Date <= self.last].reset_index(drop=True)
+        self.cut = pit.PitData(series, self.data.index.copy(), self.data.buckets)
+
+    def run_cut(self, haircut):
+        return self.sim(data=self.cut, targets=Targets(self.cut, self.cfg), vanish_haircut=haircut)
+
+    def test_the_position_leaves_on_the_first_session_after_its_last_row_at_that_close(self):
+        r = self.run_cut(0.0)
+        exits = [v for v in r.vanished if v["ticker"] == self.ticker]
+        self.assertEqual(len(exits), 1)
+        v = exits[0]
+        self.assertEqual(v["trade_date"], self.days[self.days.index(self.last) + 1])
+        self.assertEqual(v["price"], round(self.cut.last_close(self.ticker), 4))
+        self.assertEqual(v["charges"], 0.0)
+        self.assertEqual(v["bucket"], next(f["bucket"] for f in r.fills.to_dict("records") if f["ticker"] == self.ticker))
+        held = r.fills[r.fills.ticker == self.ticker].assign(q=lambda x: x.qty * (x.side == "BUY").map({True: 1, False: -1})).q.sum()
+        self.assertEqual(held, 0)  # the exit is in the fills, so the tax lots see the sale
+        self.assertEqual(len([x for x in r.vanished if x["ticker"] == self.ticker]), 1)  # never again
+
+    def test_a_write_off_costs_exactly_the_haircut_and_changes_nothing_before_the_exit(self):
+        a, b, c = self.run_cut(0.0), self.run_cut(0.5), self.run_cut(1.0)
+        qty = a.vanished[0]["qty"]
+        last = a.vanished[0]["lastClose"]
+        before = a.nav.date < a.vanished[0]["trade_date"]
+        pd.testing.assert_frame_equal(a.nav[before], b.nav[before])
+        self.assertEqual(c.vanished[0]["price"], 0.0)
+        self.assertAlmostEqual(a.vanished[0]["price"] * qty - b.vanished[0]["price"] * qty, 0.5 * last * qty, delta=0.01 * qty)
+        day = a.vanished[0]["trade_date"]
+        nav = lambda r: float(r.nav[r.nav.date == day].nav.iloc[0])  # noqa: E731
+        self.assertGreater(nav(a), nav(b))
+        self.assertGreater(nav(b), nav(c))
+
+    def test_nothing_vanishes_in_the_untouched_world(self):
+        self.assertEqual([v for v in self.sim().vanished if v["ticker"] == self.ticker], [])

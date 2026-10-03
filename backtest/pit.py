@@ -70,6 +70,14 @@ class PitData:
         """Number of rows of `key` dated on or before asof."""
         return int(np.searchsorted(self.dates[key], asof, side="right"))
 
+    def last_date(self, key: str) -> str | None:
+        """Date of the last stored row of `key`, None for a ticker with no series."""
+        d = self.dates.get(key)
+        return str(d[-1]) if d is not None and len(d) else None
+
+    def last_close(self, key: str) -> float:
+        return float(self.series[key].Close.iloc[-1])
+
     def open_price(self, key: str, day: str) -> float | None:
         """Raw Open of `key` on `day`, None when the ticker has no row that day."""
         i = self.cut(key, day) if key in self.dates else 0

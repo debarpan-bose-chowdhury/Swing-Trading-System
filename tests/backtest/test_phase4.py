@@ -10,7 +10,7 @@ import pandas as pd
 
 from app.risk import common as risk_common
 from app.risk import surveil
-from backtest import config, dividends, fills, pit, run, surv_proxy, tax
+from backtest import config, dividends, fills, pit, prep, run, surv_proxy, tax
 from tests.backtest.helpers import repo_config, bars, weekdays
 from tests.backtest.test_targets import World
 
@@ -167,6 +167,15 @@ class SingleRun(World):
         rep = json.loads(run.single(self.bt, None, self.days[300]).read_text())
         self.assertEqual(rep["trades"]["fills"], 0)  # minNewOrderInr 25000 is above every position a Rs 1 lakh account sizes
         self.assertGreaterEqual(rep["window"]["start"], self.days[200])
+
+    def test_compare_is_refused_until_the_adjustment_is_validated(self):
+        self.bt["universe"]["adjustValidated"] = False
+        with self.assertRaisesRegex(prep.MissingInput, "adjustValidated"):
+            run.compare(self.bt, None, None)
+
+    def test_the_report_counts_vanished_names(self):
+        rep = json.loads(run.single(self.bt, self.days[400], self.days[560]).read_text())
+        self.assertEqual(set(rep["vanished"]), {"exits", "haircut", "writtenOffInr", "examples"})
 
     def test_composition_mismatch_is_refused(self):
         self.bt["capital"]["composition"] = {"LargeCap": 1.0, "MidCap": 0.0, "SmallCap": 0.0}
