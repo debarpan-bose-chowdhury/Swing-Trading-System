@@ -1,0 +1,58 @@
+"""Backtest config: load backtest.json and check it. Live app/config/*.json is read as the base and never written."""
+
+import json
+from datetime import date
+from pathlib import Path
+
+CONFIG_PATH = "backtest/config/backtest.json"
+MIN_PURGE_DAYS = 168  # the longest selector look-back
+
+
+def _is_date(v) -> bool:
+    try:
+        date.fromisoformat(str(v))
+        return True
+    except ValueError:
+        return False
+
+
+def _num(v, lo: float = 0, hi: float | None = None) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and v >= lo and (hi is None or v <= hi)
+
+
+def validate(cfg: dict) -> None:
+    """Raises ValueError naming the first violation."""
+    w = cfg["window"]
+    if not (all(w[k] is None or _is_date(w[k]) for k in ("start", "end")) and isinstance(w["holdoutYears"], int) and w["holdoutYears"] >= 1):
+        raise ValueError("window: start and end null or ISO dates, holdoutYears an integer of 1 or more")
+    comp = cfg["capital"]["composition"]
+    if not _num(cfg["capital"]["inr"], 1) or abs(sum(comp.values()) - 1.0) > 0.001:
+        raise ValueError("capital: inr greater than 0 and composition summing to 1.0")
+    if cfg["fill"]["mode"] != "open" or not (isinstance(cfg["fill"]["carryOverDays"], int) and cfg["fill"]["carryOverDays"] >= 0):
+        raise ValueError("fill: only mode open is supported; carryOverDays an integer of 0 or more")
+    sched = cfg["tax"]["schedule"]
+    froms = [r["from"] for r in sched]
+    if not sched or froms != sorted(set(froms)) or not all(_is_date(d) for d in froms):
+        raise ValueError("tax.schedule: rows with ascending, unique ISO 'from' dates")
+    if not all(_num(r[k]) for r in sched for k in ("stcgPct", "ltcgPct", "ltcgExemptionInr", "cessPct")):
+        raise ValueError("tax.schedule: rates, exemption and cess must be numbers of 0 or more")
+    wf = cfg["walkforward"]
+    if wf["type"] not in ("rolling", "anchored") or not all(isinstance(wf[k], int) and wf[k] >= 1 for k in ("trainYears", "testYears", "stepYears")):
+        raise ValueError("walkforward: type rolling or anchored; train, test and step years integers of 1 or more")
+    if not (isinstance(wf["purgeDays"], int) and wf["purgeDays"] >= MIN_PURGE_DAYS):
+        raise ValueError(f"walkforward.purgeDays must be an integer of at least {MIN_PURGE_DAYS}")
+    g = cfg["gate"]
+    if not (_num(g["pboMax"], 0, 1) and _num(g["dsrMin"], 0, 1) and _num(g["oosIsMin"], 0, 1) and _num(g["neighbourhoodShare"], 0, 1) and _num(g["neighbourhoodTolerance"], 0, 1)):
+        raise ValueError("gate: pboMax, dsrMin, oosIsMin, neighbourhoodShare and neighbourhoodTolerance must be in [0, 1]")
+    for name, spans in cfg["stress"].items():
+        if not spans or not all(len(s) == 2 and _is_date(s[0]) and _is_date(s[1]) and s[0] <= s[1] for s in spans):
+            raise ValueError(f"stress.{name}: a list of [start, end] ISO date pairs, start not after end")
+    c = cfg["compute"]
+    if not (isinstance(c["workers"], int) and 1 <= c["workers"] <= 8 and isinstance(c["seed"], int)):
+        raise ValueError("compute: workers an integer from 1 to 8, seed an integer")
+
+
+def load(path: str = CONFIG_PATH) -> dict:
+    cfg = json.loads(Path(path).read_text(encoding="utf-8"))
+    validate(cfg)
+    return cfg

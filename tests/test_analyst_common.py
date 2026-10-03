@@ -54,6 +54,9 @@ class ValidationTests(unittest.TestCase):
         self.bad(lambda c: c["selector"]["liquidity"].update(statistic="max"))
         self.bad(lambda c: c["selector"]["bearScore"].pop("dd63"))
         self.bad(lambda c: c["regime"].update(minRows=0))
+        self.bad(lambda c: c["regime"].update(smaFast=200))
+        self.bad(lambda c: c["regime"].update(momentumDays=0))
+        self.bad(lambda c: c["regime"].update(smaSlow=400))  # minRows 210 is too short
         self.bad(lambda c: c["signals"].update(retryEveryMinutes=0))
         self.bad(lambda c: c["signals"].update(retryUntil="Sunday 10pm"))
 
