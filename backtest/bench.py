@@ -38,8 +38,21 @@ def _with_point(w: world.World, schema: params.Schema, point: dict) -> world.Wor
     return world.World(w.cfg, risk, analyst, w.data, Targets(w.data, analyst), w.dividends, w.surveillance)
 
 
-def _init_worker(point: dict) -> None:
+THREAD_ENV = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS", "ARROW_NUM_THREADS")
+
+
+def limit_threads() -> None:
+    """One native thread per process: with N worker processes, pandas/Arrow/BLAS pools of their own would oversubscribe the cores."""
+    for k in THREAD_ENV:
+        os.environ[k] = "1"  # inherited by workers started afterwards
+
+
+def _init_worker(point: dict, single_thread: bool = True) -> None:
     global _WORLD
+    if single_thread:
+        import pyarrow
+        pyarrow.set_cpu_count(1)
+        pyarrow.set_io_thread_count(1)
     w = world.World.build(config.load())
     _WORLD = _with_point(w, params.Schema.load(w.cfg["paths"]["params"], w.risk, w.analyst), point)
 
@@ -59,6 +72,14 @@ def _task(span: tuple[str, str]) -> tuple[int, float]:
     t = time.perf_counter()
     r = _simulate(_WORLD, *span)
     return len(r.nav), time.perf_counter() - t
+
+
+def parallel(k: int, span: tuple[str, str], point: dict, single_thread: bool) -> tuple[float, float]:
+    """Run k identical simulations in k processes. Returns (wall seconds including startup, slowest simulation seconds)."""
+    t = time.perf_counter()
+    with ProcessPoolExecutor(k, initializer=_init_worker, initargs=(point, single_thread)) as pool:
+        got = list(pool.map(_task, [span] * k))
+    return time.perf_counter() - t, max(s for _, s in got)
 
 
 def windows_for(w: world.World, schema: params.Schema) -> walkforward.Windows:
@@ -82,12 +103,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--years", type=float, help="simulate only this many years from the common start (default: the whole tuning region)")
     parser.add_argument("--profile", action="store_true", help="print the top functions by own time")
     parser.add_argument("--workers", type=int, default=0, help="also time this many simulations in parallel processes")
+    parser.add_argument("--scaling", help="comma list of worker counts, e.g. 1,2,4,6,8: time that many parallel runs of a short window (default 2 years) for each")
+    parser.add_argument("--no-limit-threads", action="store_true", help="leave pandas/Arrow/BLAS thread pools at their defaults in the workers (to compare)")
     parser.add_argument("--tried", type=int, default=30, help="parameter sets in the gate projection")
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                         help="parameter overrides from params.json, e.g. --set sizing.minNewOrderInr=3000 (repeatable); the live config at Rs 1 lakh cannot trade")
     args = parser.parse_args(argv)
     try:
         cfg = config.load()
+        single_thread = not args.no_limit_threads
+        if single_thread:
+            limit_threads()
+        if args.scaling and args.years is None:
+            args.years = 2.0
         t0 = time.perf_counter()
         w = world.World.build(cfg)
         t_build = time.perf_counter() - t0
@@ -125,15 +153,23 @@ def main(argv: list[str] | None = None) -> int:
         print(f"strict gate with {args.tried} tried points: {g['runs']} simulations, {g['years']} simulated years "
               f"({g['folds']} folds, {g['neighbours']} neighbours, tuning region {g['spanYears']}y)")
         print(f"  one worker: {full_s / 3600:.1f} h; with 8 workers at ideal scaling: {full_s / 8 / 3600:.1f} h")
+        measured: list[tuple[float, int]] = []  # (throughput, workers)
+        mode = "single native thread per worker" if single_thread else "default native thread pools"
         if args.workers > 1:
-            t2 = time.perf_counter()
-            with ProcessPoolExecutor(args.workers, initializer=_init_worker, initargs=(point,)) as pool:
-                got = list(pool.map(_task, [(start, end)] * args.workers))
-            wall = time.perf_counter() - t2
-            slowest = max(s for _, s in got)
-            print(f"{args.workers} parallel runs: {wall:.1f}s wall in total, of which {max(wall - slowest, 0):.1f}s was starting workers and loading data")
+            wall, slowest = parallel(args.workers, (start, end), point, single_thread)
+            print(f"{args.workers} parallel runs ({mode}): {wall:.1f}s wall in total, of which {max(wall - slowest, 0):.1f}s was starting workers and loading data")
             print(f"  slowest worker simulated in {slowest:.1f}s vs {t_run:.1f}s alone: {slowest / t_run:.2f}x (1.0 = perfect scaling); "
                   f"throughput {args.workers * t_run / slowest:.1f} runs per single-run time")
+            measured.append((args.workers * t_run / slowest, args.workers))
+        if args.scaling:
+            print(f"scaling sweep on {start}..{end} ({mode}); single run alone {t_run:.1f}s")
+            for k in sorted({int(x) for x in args.scaling.split(",")}):
+                wall, slowest = parallel(k, (start, end), point, single_thread)
+                print(f"  {k:>2} workers: slowest {slowest:6.1f}s = {slowest / t_run:.2f}x, throughput {k * t_run / slowest:.1f}x, wall {wall:.1f}s")
+                measured.append((k * t_run / slowest, k))
+        if measured:
+            best, k = max(measured)
+            print(f"strict gate at the best measured throughput ({best:.1f}x with {k} workers): {full_s / best / 3600:.1f} h")
         return 0
     except prep.MissingInput as e:
         print(f"bench: {e}", file=sys.stderr)

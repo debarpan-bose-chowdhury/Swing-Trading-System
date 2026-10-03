@@ -41,3 +41,15 @@ class SetParsing(unittest.TestCase):
         self.assertEqual(bench.parse_set(["sizing.minNewOrderInr=3000", "stops.atrMultiplier=3.5"]), {"sizing.minNewOrderInr": 3000, "stops.atrMultiplier": 3.5})
         with self.assertRaises(ValueError):
             bench.parse_set(["nokey"])
+
+
+class Threads(unittest.TestCase):
+    def test_limit_threads_sets_every_native_pool_to_one(self):
+        import os
+        saved = {k: os.environ.get(k) for k in bench.THREAD_ENV}
+        try:
+            bench.limit_threads()
+            self.assertTrue(all(os.environ[k] == "1" for k in bench.THREAD_ENV))
+        finally:
+            for k, v in saved.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)

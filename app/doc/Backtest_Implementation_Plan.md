@@ -158,3 +158,15 @@ That run made 0 fills (Rs 1 lakh cannot meet the live Rs 25,000 minimum order), 
 ### Phase 7a on your PC: first real result and fix
 
 `--probe` passed for the 2015 legacy and 2024 UDiFF samples (real headers match the configured names). `--download` then failed on every 2007 day: the early legacy layout has no `ISIN` column (and a trailing comma). Fixed: `ISIN` is optional, the probe now checks 4 legacy days (2007-09-17, 2008-01-02, 2015-06-02, 2024-07-05) and 2 UDiFF days, and `--download` stops after 10 consecutive failures (`bhav.client.abortAfterFailures`) instead of walking all 4,600 days. Unreadable files are never cached, so nothing needs cleaning up. Other layout drift between 2008 and 2024 is still possible; the multi-day probe is there to catch it before the long download.
+
+### Runtime spike on your PC, trading run (`bench --workers 8 --set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500`)
+
+12 CPU threads. 143 names, 4,672 rows, 3,637 sessions, 744 fills. Build 5.5 s.
+
+| | Result |
+|---|---|
+| One 14.8-year run | 380 s = 104 ms per session = 26.3 s per simulated year (better than the 240 ms extrapolated from the no-trade run) |
+| 8 parallel runs | slowest 4.13x slower than alone, throughput only 1.9x, wall 1,601 s |
+| Strict gate, 30 tried points (130 simulations) | 12.7 h on one worker; about 6.7 h at the measured 1.9x throughput (1.6 h only at ideal scaling) |
+
+The poor scaling is not seen on the 4-core cloud box (4 workers: 1.0x slowdown), so something on the PC saturates: candidates are thread pools of pandas/Arrow/BLAS oversubscribing 12 threads, fewer physical cores than threads, memory bandwidth, or power/thermal limits. `bench` now sets one native thread per worker by default (`--no-limit-threads` to compare) and `--scaling 1,2,4,6,8` sweeps worker counts on a 2-year window to find the best count; the strict-gate projection uses the best throughput it measured.
