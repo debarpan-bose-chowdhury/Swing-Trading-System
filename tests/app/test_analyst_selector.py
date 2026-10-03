@@ -11,7 +11,7 @@ import pandas as pd
 
 from app.analyst import common, selector
 from app.market.store import Store
-from tests.market_helpers import bars, weekdays
+from tests.app.market_helpers import bars, weekdays
 
 CFG = common.load_config()  # read before any test changes the working directory
 RD = "2026-10-02"

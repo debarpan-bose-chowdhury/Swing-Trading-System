@@ -24,7 +24,7 @@ Defaults I took from the code (reverse any of them):
 - **DP charge:** per sell fill (per scrip per day), as `costs.sell_charges` and `shadow.apply` do. The TDD's "once per sell day" is read as loose wording. A single round trip is still Rs 293.28.
 - **Entry date:** decisions (deferral rule) keep the live book's first-buy entry date; tax uses true FIFO lots. The report states how often the two views disagree.
 - **Trial registry:** append-only JSON lines (stdlib, atomic append), not Parquet, which cannot be appended cheaply.
-- **Tests:** `backtest/tests`, run with `uv run --project backtest pytest backtest/tests`. The root `pytest` (coverage of `app`) is untouched.
+- **Tests:** `tests/backtest`, run with `uv run --project backtest pytest -c backtest/pyproject.toml`. The root `pytest` (coverage of `app`) is untouched.
 - **Stress windows (config, editable):** 2008 crisis 2008-09-01..2009-03-31, 2013 taper 2013-05-22..2013-09-30 plus 2015-08-01..2016-02-29, COVID 2020-02-01..2020-12-31, 2022 calendar year plus 2024-06-03..2024-06-10.
 - **Objectives:** post-tax CAGR (max), max drawdown (min) and ulcer index (min), all on the post-tax curve.
 
@@ -114,7 +114,7 @@ After the loop, `tax.py` turns the fill stream into FIFO lots, charges tax at ea
 
 ## 8. Progress and deviations (updated after Phase 5)
 
-Done and pushed: phases 0 to 5 (see `git log`). Offline tests: `uv run --project backtest pytest backtest/tests`.
+Done and pushed: phases 0 to 5 (see `git log`). Offline tests: `uv run --project backtest pytest -c backtest/pyproject.toml`.
 
 Deviations from sections 1 to 7, all decided with you or forced by the code:
 - **Account size:** a Rs 1 lakh account never trades under the live `risk.json` (smallest position the sizer can open is below `minNewOrderInr` 25,000). You chose to keep Rs 1 lakh and tune the sizing minimums, name caps and risk per position (`params.json`, group "sizing"). Until a value is confirmed a plain `--single` run at the live config makes no trades.

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.market.common import safe_path
 from backtest.fills import Book
 
 
@@ -22,6 +23,7 @@ class Dividends:
 
     @classmethod
     def load(cls, path: Path) -> "Dividends":
+        path = safe_path(path)
         return cls(pd.read_csv(path, dtype={"Ticker": str, "ExDate": str}) if path.exists() else None)
 
     def credit(self, book: Book, asof: str) -> list[dict]:

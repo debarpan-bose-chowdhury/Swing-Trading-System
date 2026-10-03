@@ -6,7 +6,7 @@ import unittest
 import pandas as pd
 
 from app.risk import common
-from tests.risk_helpers import FRIDAY, NOW, THURSDAY, Env
+from tests.app.risk_helpers import FRIDAY, NOW, THURSDAY, Env
 
 MONDAY = "2026-09-28"
 

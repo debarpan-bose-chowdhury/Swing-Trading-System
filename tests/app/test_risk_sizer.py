@@ -6,7 +6,7 @@ from unittest.mock import ANY
 import pandas as pd
 
 from app.risk import ladder, monitor, sizer
-from tests.risk_helpers import FRIDAY, Env
+from tests.app.risk_helpers import FRIDAY, Env
 
 NAV = 700000.0
 COOL = pd.DataFrame(columns=["ticker", "trigger_date", "trigger_adj_close", "release_after"])

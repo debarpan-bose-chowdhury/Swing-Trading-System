@@ -2,7 +2,8 @@
 
 import json
 from datetime import date
-from pathlib import Path
+
+from app.market.common import safe_path
 
 CONFIG_PATH = "backtest/config/backtest.json"
 MIN_PURGE_DAYS = 168  # the longest selector look-back
@@ -86,6 +87,6 @@ def validate(cfg: dict) -> None:
 
 
 def load(path: str = CONFIG_PATH) -> dict:
-    cfg = json.loads(Path(path).read_text(encoding="utf-8"))
+    cfg = json.loads(safe_path(path).read_text(encoding="utf-8"))
     validate(cfg)
     return cfg

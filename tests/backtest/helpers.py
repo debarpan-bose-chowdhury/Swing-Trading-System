@@ -12,6 +12,15 @@ import pandas as pd
 from app.market.store import Store
 
 CUTOFF = "2025-01-01"
+REPO = Path(__file__).resolve().parents[2]
+
+
+def repo_config() -> dict:
+    """The shipped backtest.json, read straight from the checkout (config.load() only reads inside the working directory, which the tests change)."""
+    from backtest import config
+    cfg = json.loads((REPO / "backtest/config/backtest.json").read_text(encoding="utf-8"))
+    config.validate(cfg)
+    return cfg
 
 
 def weekdays(start: str, n: int) -> list[str]:

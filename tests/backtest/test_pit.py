@@ -1,10 +1,9 @@
 import unittest
 
 import numpy as np
-import pandas as pd
 
 from backtest import pit
-from backtest.tests.helpers import TreeCase, bars, weekdays
+from tests.backtest.helpers import TreeCase, bars, weekdays
 
 
 class PitTests(TreeCase):

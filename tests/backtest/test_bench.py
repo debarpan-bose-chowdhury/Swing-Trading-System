@@ -3,7 +3,7 @@ import unittest
 import pandas as pd
 
 from backtest import bench, walkforward, workers
-from backtest.tests.test_params_walkforward import BT, schema
+from tests.backtest.test_params_walkforward import BT, schema
 
 
 class BenchTests(unittest.TestCase):
@@ -18,7 +18,8 @@ class BenchTests(unittest.TestCase):
         self.assertAlmostEqual(g["spanYears"], 14.9, delta=0.5)
 
     def test_missing_data_is_exit_3(self):
-        import os, tempfile
+        import os
+        import tempfile
         previous = os.getcwd()
         with tempfile.TemporaryDirectory() as tmp:
             os.chdir(tmp)

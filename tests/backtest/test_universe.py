@@ -1,12 +1,11 @@
-import json
 import shutil
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from backtest import adjust, bhav, config, links, universe
-from backtest.tests.helpers import TreeCase, bars, weekdays
+from backtest import adjust, config, links, universe
+from tests.backtest.helpers import repo_config, TreeCase, bars, weekdays
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -149,7 +148,7 @@ class LinkTests(TreeCase):
 class ValidateTests(TreeCase):
     def setUp(self):
         super().setUp()
-        self.cfg = config.load(REPO / "backtest/config/backtest.json")
+        self.cfg = repo_config()
         self.cfg["paths"]["data"] = "backtest/data"
 
     def test_derived_series_match_yahoo_and_splits_are_matched(self):
@@ -188,7 +187,7 @@ class CliTests(TreeCase):
 class TuneTests(TreeCase):
     def setUp(self):
         super().setUp()
-        self.cfg = config.load(REPO / "backtest/config/backtest.json")
+        self.cfg = repo_config()
         self.cfg["paths"]["data"] = "backtest/data"
         days = weekdays("2012-01-02", 200)
         self.days = days

@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import app.__main__ as app_main
 from app.__main__ import ApplicationHandler
@@ -118,7 +118,7 @@ class HealthEndpointTests(unittest.TestCase):
         context.wrap_socket.return_value = wrapped_socket
         mock_create_context.return_value = context
 
-        script_path = Path(__file__).resolve().parents[1] / "app" / "__main__.py"
+        script_path = Path(__file__).resolve().parents[2] / "app" / "__main__.py"
         with patch.dict(os.environ, {"PORT": "7000", "TLS_CERTFILE": "cert.pem", "TLS_KEYFILE": "key.pem"}, clear=True):
             runpy.run_path(str(script_path), run_name="__main__")
 

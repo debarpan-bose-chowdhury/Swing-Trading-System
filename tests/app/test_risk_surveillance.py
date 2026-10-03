@@ -10,7 +10,7 @@ from datetime import datetime
 from app.market.common import IST
 from app.risk import probe, surveil, surveillance
 from app.risk.common import Report
-from tests.risk_helpers import LOG, Env
+from tests.app.risk_helpers import LOG, Env
 
 SOURCES = {
     "asm": {"url": "https://nse.test/asm.csv", "format": "csv", "symbolColumn": "Symbol", "valueColumn": "Stage", "termColumn": "Term"},

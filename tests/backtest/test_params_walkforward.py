@@ -3,7 +3,6 @@ import random
 import unittest
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from app.analyst import common as analyst_common

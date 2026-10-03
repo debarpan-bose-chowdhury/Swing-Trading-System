@@ -7,11 +7,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.analyst import common as analyst_common
 from app.risk import common as risk_common
 from backtest import dividends, pit, replay
 from backtest.targets import Targets
-from backtest.tests.test_targets import World
+from tests.backtest.test_targets import World
 
 RISK_CFG = risk_common.load_config("run")  # read before the tests change the working directory
 CAPITAL = 700000.0

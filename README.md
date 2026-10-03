@@ -298,7 +298,8 @@ retries.
 - `app/risk/`: Risk Manager (`surveillance`, `run`, `evaluate`, `probe`; `sizer`, `monitor`, `stops`, `ladder`, `nav`, `shadow`, `evaluator`, `tax`, `surveil`, shared `common`).
 - `app/config/`: `config.json` (metadata pipeline), `market.json`, `indices.json`, `nse_calendar.json` (market stages), `analyst.json`, `seed_positions.csv` (analyst), `risk.json`, `cash_flows.csv` (risk).
 - `app/data/`: pipeline output (`raw/`, `storage/`, `market/`, `logs/`, `health.json`); git-ignored.
-- `tests/`: unit tests for the HTTP service, the metadata pipeline, the market stages, the Analyst and the Risk Manager (Yahoo, NSE and the broker are always faked).
+- `tests/app/`: unit tests for the HTTP service, the metadata pipeline, the market stages, the Analyst and the Risk Manager (Yahoo, NSE and the broker are always faked).
+- `tests/backtest/`: offline tests for the sibling `backtest/` package (run with its own project, see CLAUDE.md).
 
 ## CI/CD
 

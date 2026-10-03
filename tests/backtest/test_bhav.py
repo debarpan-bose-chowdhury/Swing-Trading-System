@@ -8,10 +8,10 @@ import numpy as np
 import pandas as pd
 
 from app.market.tradingcal import Calendar
-from backtest import bhav, config, prep
-from backtest.tests.helpers import TreeCase, bars, weekdays
+from backtest import bhav, prep
+from tests.backtest.helpers import repo_config, TreeCase, bars, weekdays
 
-CFG = config.load(Path(__file__).resolve().parents[1] / "config/backtest.json")
+CFG = repo_config()
 
 
 def legacy_text(day: str, rows: list[tuple], header=None) -> str:
@@ -212,7 +212,7 @@ class CrosscheckTests(TreeCase):
 class CliTests(TreeCase):
     def test_check_is_offline_and_download_is_locked_without_a_probe(self):
         import shutil
-        shutil.copytree(Path(__file__).resolve().parents[1] / "config", "backtest/config")
+        shutil.copytree(Path(__file__).resolve().parents[2] / "backtest/config", "backtest/config")
         self.assertEqual(bhav.main(["--check"]), 0)
         self.assertEqual(bhav.main(["--download"]), 3)
         self.assertFalse(Path("backtest/data").exists())

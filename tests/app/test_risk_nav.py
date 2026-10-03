@@ -5,7 +5,7 @@ import unittest
 import pandas as pd
 
 from app.risk import nav
-from tests.risk_helpers import Env
+from tests.app.risk_helpers import Env
 
 
 class FlowFileTests(Env):

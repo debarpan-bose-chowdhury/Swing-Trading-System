@@ -13,7 +13,7 @@ from app.analyst.journal import COLS as JOURNAL_COLS
 from app.market.common import IST
 from app.risk import common, evaluate, evaluator, tax
 from app.risk.common import Gate, Report
-from tests.risk_helpers import FRIDAY, LOG, THURSDAY, Env
+from tests.app.risk_helpers import FRIDAY, LOG, THURSDAY, Env
 
 
 def series(values, start="2026-01-05"):

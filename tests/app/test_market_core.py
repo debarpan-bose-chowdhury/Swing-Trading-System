@@ -13,7 +13,7 @@ from app.market import common, mailer, registry
 from app.market.common import IST, Busy, Report
 from app.market.tradingcal import Calendar
 from app.market.validator import validate
-from tests.market_helpers import LOG, NOW, TODAY, Env, bars, make_cfg
+from tests.app.market_helpers import LOG, NOW, TODAY, Env, bars
 
 
 class ValidatorTests(Env):

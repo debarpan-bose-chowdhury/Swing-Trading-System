@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from app.market.common import safe_path
+
 LINK_COLS = ["Old", "New", "Date", "Source", "GapDays"]
 
 
@@ -27,6 +29,7 @@ def isin_links(rows: pd.DataFrame) -> pd.DataFrame:
 
 
 def manual_links(path: Path) -> pd.DataFrame:
+    path = safe_path(path)
     if not path.exists():
         return pd.DataFrame(columns=LINK_COLS)
     m = pd.read_csv(path, dtype=str, keep_default_na=False)
@@ -36,6 +39,7 @@ def manual_links(path: Path) -> pd.DataFrame:
 def nse_links(path: Path, layout: dict | None) -> pd.DataFrame:
     """NSE's symbol-change file. It has no header row and the company name (first field) may contain commas, so fields are counted
     from the end: layout {"fromEnd": {"old": 3, "new": 2, "date": 1}, "dateFormat": "%d-%b-%Y"}. Empty until a layout is configured."""
+    path = safe_path(path)
     if not path.exists() or not layout:
         return pd.DataFrame(columns=LINK_COLS)
     pos = layout["fromEnd"]

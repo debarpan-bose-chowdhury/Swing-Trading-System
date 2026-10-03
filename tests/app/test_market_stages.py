@@ -4,13 +4,12 @@ import json
 from datetime import datetime
 from unittest.mock import patch
 
-import pandas as pd
 
 from app.market import archiver, migrator, updator
 from app.market.common import IST, Report
 from app.market.fetcher import Blocked
 from app.market.store import Store
-from tests.market_helpers import CUTOFF, LOG, NOW, TODAY, Env, bars, weekdays
+from tests.app.market_helpers import CUTOFF, LOG, NOW, TODAY, Env, bars, weekdays
 
 HISTORY = weekdays("2026-08-31", "2026-09-28")  # stored through Monday
 LONG = weekdays("2025-01-01", "2026-09-29")

@@ -17,12 +17,11 @@ import argparse
 import io
 import json
 import logging
-import random
 import sys
 import time
 import urllib.error
 import zipfile
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import numpy as np

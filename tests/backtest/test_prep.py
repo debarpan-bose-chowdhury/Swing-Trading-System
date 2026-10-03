@@ -8,8 +8,8 @@ import pandas as pd
 
 from app.market.common import COLS
 from app.market.fetcher import EXTRA, Fetcher
-from backtest import config, prep
-from backtest.tests.helpers import TreeCase, bars, weekdays
+from backtest import prep
+from tests.backtest.helpers import repo_config, TreeCase, bars, weekdays
 
 
 def market_cfg() -> dict:
@@ -28,7 +28,7 @@ class PrepTests(TreeCase):
         self.put("AAA", bars("AAA", self.days, 100.0, adj_factor=f))
         self.put("BBB", bars("BBB", self.days, 50.0))
         self.put("^NSEI", bars("^NSEI", self.days, 10000.0), index=True)
-        self.cfg = config.load(Path(__file__).parents[1] / "config/backtest.json")
+        self.cfg = repo_config()
         self.cfg["paths"]["data"] = "backtest/data"
         self.log = logging.getLogger("t")
 

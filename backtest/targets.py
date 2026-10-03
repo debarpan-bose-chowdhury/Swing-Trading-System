@@ -2,7 +2,7 @@
 
 This replaces analyst.signals.build_targets for history. That function reads bucket files with a 7-day age check, builds its
 own Store and reads the registry, so it cannot run for a past date. The selection itself is the app's selector.select_bucket,
-fed with slices of precomputed panels; tests/test_targets.py compares the result with `python -m app.analyst.signals --as-of`.
+fed with slices of precomputed panels; tests/backtest/test_targets.py compares the result with `python -m app.analyst.signals --as-of`.
 
 Not reproduced, on purpose: the live data-quality gates (maxMissingShare, bucket-file age) and the registry's active flag
 (v1 universe = today's bucket members that have stored history), and the delta/holdings fields decide() does not read.

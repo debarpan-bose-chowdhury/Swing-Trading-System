@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.market import calendar_sync
-from tests.market_helpers import LOG, Env, weekdays
+from tests.app.market_helpers import LOG, Env, weekdays
 
 SYNC = {"homeUrl": "home", "holidayUrl": "api/{year}", "firstYear": 2011, "maxRetries": 1, "backoffSeconds": [0]}
 

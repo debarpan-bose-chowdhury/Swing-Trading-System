@@ -8,12 +8,12 @@ import pyarrow.parquet as pq
 import yfinance as yf
 
 from app.market import ingest
-from app.market.common import COLS, Report
+from app.market.common import COLS
 from app.market.fetcher import Blocked, Fetcher, _Capture, tidy
 from app.market.ingest import Series, backfill, build_series, fetch_valid
 from app.market.store import Store
 from app.market.tradingcal import Calendar
-from tests.market_helpers import CUTOFF, LOG, Env, bars, weekdays
+from tests.app.market_helpers import CUTOFF, Env, bars, weekdays
 
 _REAL_YF = Fetcher._yf  # captured before Env patches it
 OLD = ["2025-01-02", "2025-01-03"]

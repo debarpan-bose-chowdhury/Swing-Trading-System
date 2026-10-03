@@ -10,9 +10,9 @@ import pandas as pd
 
 from app.risk import common as risk_common
 from app.risk import surveil
-from backtest import config, dividends, fills, pit, report, run, surv_proxy, tax
-from backtest.tests.helpers import bars, weekdays
-from backtest.tests.test_targets import World
+from backtest import config, dividends, fills, pit, run, surv_proxy, tax
+from tests.backtest.helpers import repo_config, bars, weekdays
+from tests.backtest.test_targets import World
 
 REPO = Path(__file__).resolve().parents[2]
 RISK_CFG = risk_common.load_config("run")
@@ -143,7 +143,7 @@ class SingleRun(World):
         super().setUp()  # changes into the temp working directory
         shutil.copytree(REPO / "app/config", "app/config", dirs_exist_ok=True)
         Path("app/config/nse_calendar.json").write_text(json.dumps({"holidays": ["2021-01-01"], "specialSessions": []}))  # weekdays only
-        self.bt = config.load(REPO / "backtest/config/backtest.json")
+        self.bt = repo_config()
         self.bt["overrides"]["risk"] = {"sizing": {"minNewOrderInr": 3000, "minAdjustmentInr": 1500}}
         self.bt["tax"]["confirmed"] = True
 

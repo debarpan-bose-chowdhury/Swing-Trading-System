@@ -9,7 +9,7 @@ import pandas as pd
 from app.market.common import IST
 from app.risk import common, run
 from app.risk.common import Gate, Report
-from tests.risk_helpers import FRIDAY, NOW, THURSDAY, Env
+from tests.app.risk_helpers import FRIDAY, NOW, THURSDAY, Env
 
 SUNDAY_LATE = datetime(2026, 9, 27, 22, 30, tzinfo=IST)
 SATURDAY = datetime(2026, 9, 26, 10, 0, tzinfo=IST)

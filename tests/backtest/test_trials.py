@@ -13,8 +13,9 @@ import pandas as pd
 
 from app.risk import evaluator
 from backtest import params, trials, walkforward, world
-from backtest.tests.test_params_walkforward import ANALYST, BT, RISK, schema
-from backtest.tests.test_phase4 import SingleRun
+from tests.backtest.test_params_walkforward import BT, schema
+from tests.backtest.helpers import REPO
+from tests.backtest.test_phase4 import SingleRun
 
 
 class EngineSession(SingleRun):
@@ -23,7 +24,7 @@ class EngineSession(SingleRun):
     def setUp(self):
         super().setUp()
         self.w = world.World.build(self.bt)
-        self.schema = params.Schema.load(Path(__file__).parents[1] / "config/params.json", self.w.risk, self.w.analyst)
+        self.schema = params.Schema(dict(json.loads((REPO / "backtest/config/params.json").read_text(encoding="utf-8")), confirmed=False), self.w.risk, self.w.analyst)
         wf = dict(BT["walkforward"], trainYears=1, testYears=1, purgeDays=10)
         self.windows = walkforward.Windows(list(self.w.data.index.Date), self.days[300], wf, 1, 0)
         self.session = trials.Session(self.w, self.schema, self.windows, trials.Registry(Path("trials")), Path("trials/holdout.json"))

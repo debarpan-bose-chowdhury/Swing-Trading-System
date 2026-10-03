@@ -14,6 +14,7 @@ from pathlib import Path
 from app.analyst import common as analyst_common
 from app.analyst.regime import UNKNOWN_EXTRA
 from app.risk import common as risk_common
+from app.market.common import safe_path
 
 LONGEST_WINDOW_KEYS = ("selector.lookback.", "selector.trendMa", "regime.smaSlow", "regime.momentumDays")  # look-back windows, in trading days
 MIN_PURGE = 168  # trading days; backtest.json walkforward.purgeDays cannot go below it
@@ -93,7 +94,7 @@ class Schema:
 
     @classmethod
     def load(cls, path: str | Path, risk: dict, analyst: dict) -> "Schema":
-        return cls(json.loads(Path(path).read_text(encoding="utf-8")), risk, analyst)
+        return cls(json.loads(safe_path(path).read_text(encoding="utf-8")), risk, analyst)
 
     def live_value(self, p: Param):
         """The live config's value (the first path's; the paths of one parameter move together)."""

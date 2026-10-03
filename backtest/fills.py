@@ -1,7 +1,7 @@
 """Next-open fills and the simulated book: the maths of app.risk.shadow.apply without its files.
 
 shadow.apply re-reads every shadow signal file and rewrites fills.csv on each call, which is quadratic over an 18-year run, so this
-keeps the same state in memory. tests/test_fills.py runs both side by side and requires identical fills, book and cash.
+keeps the same state in memory. tests/backtest/test_fills.py runs both side by side and requires identical fills, book and cash.
 
 Mirrored on purpose, including its quirks:
 - the price in the fills (and so the book's average cost) is rounded to 4 decimals; cash uses the unrounded price;

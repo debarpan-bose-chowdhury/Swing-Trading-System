@@ -16,7 +16,7 @@ dev = ["pytest"]
 swing-trading-system = { path = "..", editable = true }
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["../tests/backtest"]
 pythonpath = [".."]
 
 [tool.setuptools]

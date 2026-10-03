@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from backtest import config, links, pit, pituniverse as pu, prep
-from backtest.tests.helpers import TreeCase, bars, weekdays
+from backtest import pit, pituniverse as pu, prep
+from tests.backtest.helpers import repo_config, TreeCase, bars, weekdays
 
 REPO = Path(__file__).resolve().parents[2]
 SIZES = {"LargeCap": 2, "MidCap": 2, "SmallCap": 2}
@@ -82,7 +82,7 @@ class BuildTests(TreeCase):
     def setUp(self):
         super().setUp()
         Path("app/config/config.json").write_text(json.dumps({"filter": {"capBuckets": [{"name": b, "topN": n} for b, n in SIZES.items()]}}))
-        self.cfg = config.load(REPO / "backtest/config/backtest.json")
+        self.cfg = repo_config()
         self.cfg["paths"].update(data="backtest/data", appConfig="app/config", appData="app/data")
         self.days = weekdays("2020-01-01", 260)
         names = {"BIG": 900.0, "DEAD": 800.0, "MID": 500.0, "REN": 400.0, "SMALL": 300.0, "TINY": 1.0, "IBUL-RE": 5000.0}
@@ -139,8 +139,8 @@ class BuildTests(TreeCase):
 
 from backtest import replay  # noqa: E402
 from backtest.targets import Targets  # noqa: E402
-from backtest.tests.test_replay import Replay  # noqa: E402
-from backtest.tests.test_targets import BUCKETS  # noqa: E402
+from tests.backtest.test_replay import Replay  # noqa: E402
+from tests.backtest.test_targets import BUCKETS  # noqa: E402
 
 
 class PitModeEngine(Replay):

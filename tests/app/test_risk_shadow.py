@@ -8,7 +8,7 @@ import pandas as pd
 from app.analyst import costs
 from app.analyst.ledger import read_fills
 from app.risk import shadow
-from tests.risk_helpers import FRIDAY, THURSDAY, Env
+from tests.app.risk_helpers import FRIDAY, THURSDAY, Env
 
 
 def signal(asof, execution, actions):

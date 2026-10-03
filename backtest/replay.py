@@ -6,7 +6,7 @@ app.risk.run.decide() produces the day's actions, NAV row and state. The actions
 
 decide() reads its state and NAV history from disk. Two names are replaced for the duration of a run, inside this process only:
 app.risk.run.load_state and app.risk.nav.read_nav now return in-memory objects. Nothing under app/ is edited or written.
-tests/test_replay.py compares the result with a run through the app's real commit() on a temp folder.
+tests/backtest/test_replay.py compares the result with a run through the app's real commit() on a temp folder.
 """
 
 import logging
@@ -20,7 +20,6 @@ from unittest.mock import patch
 import pandas as pd
 
 from app.analyst import regime
-from app.analyst.signals import execution_date
 from app.market.common import IST
 from app.market.tradingcal import Calendar
 from app.risk import nav, run as risk_run

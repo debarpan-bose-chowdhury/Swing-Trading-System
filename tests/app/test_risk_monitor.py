@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from app.risk import monitor
-from tests.risk_helpers import FRIDAY, THURSDAY, Env
+from tests.app.risk_helpers import FRIDAY, THURSDAY, Env
 
 
 def rising(n, lo=150.0, hi=250.0):

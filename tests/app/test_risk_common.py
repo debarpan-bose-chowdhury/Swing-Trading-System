@@ -14,7 +14,7 @@ from unittest.mock import patch
 from app.market.common import IST
 from app.risk import common
 from app.risk.common import Gate, Report
-from tests.risk_helpers import Env
+from tests.app.risk_helpers import Env
 
 
 class ShippedConfigTests(unittest.TestCase):
