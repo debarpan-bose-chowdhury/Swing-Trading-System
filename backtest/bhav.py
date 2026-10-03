@@ -5,6 +5,7 @@
   python -m backtest.bhav --download [--from D --to D]  fill the raw cache for every trading day (network; resumable; needs a passed probe)
   python -m backtest.bhav --build                     parse the raw cache into backtest/data/bhav/bhav_<year>.parquet
   python -m backtest.bhav --crosscheck [--strict]     compare the Yahoo prices in app/data with bhavcopy -> backtest/data/bhav_crosscheck.csv
+  python -m backtest.bhav --summary                   what the cross-check findings are made of (short text to read or paste)
 
 The URL templates and column names are unverified until --probe passes on your PC (the NSE hosts are not reachable from the cloud).
 Reads app/data read-only; every output is under backtest/data/. Exit codes: 0 ok, 1 failed, 3 a gate is not met (probe not passed,
@@ -84,6 +85,16 @@ def unzip(payload: bytes) -> str:
     return payload.decode("utf-8-sig")
 
 
+def to_iso(dates: pd.Series, fmt: str) -> pd.Series:
+    """ISO dates from text. A file that writes the year with two digits (seen in 2020-07-13) is read with %y instead of %Y."""
+    try:
+        return pd.to_datetime(dates, format=fmt).dt.strftime("%Y-%m-%d")
+    except ValueError:
+        if "%Y" not in fmt:
+            raise
+        return pd.to_datetime(dates, format=fmt.replace("%Y", "%y")).dt.strftime("%Y-%m-%d")
+
+
 def parse(text: str, fmt: dict, keep: list[str], day: str | None = None) -> pd.DataFrame:
     """Normalised rows (NORMAL columns) of the kept series. Raises ValueError naming every column the mapping expects but the file lacks."""
     df = pd.read_csv(io.StringIO(text), dtype=str, keep_default_na=False)
@@ -95,7 +106,7 @@ def parse(text: str, fmt: dict, keep: list[str], day: str | None = None) -> pd.D
     c = fmt["columns"]
     df = df[df[c["series"]].str.strip().isin(keep)]
     out = pd.DataFrame({
-        "Ticker": df[c["symbol"]].str.strip(), "Date": pd.to_datetime(df[fmt["dateColumn"]].str.strip(), format=fmt["dateFormat"]).dt.strftime("%Y-%m-%d"),
+        "Ticker": df[c["symbol"]].str.strip(), "Date": to_iso(df[fmt["dateColumn"]].str.strip(), fmt["dateFormat"]),
         "Series": df[c["series"]].str.strip(), "Isin": df[c["isin"]].str.strip() if c["isin"] in df.columns else ""})
     for k, name in (("open", "Open"), ("high", "High"), ("low", "Low"), ("close", "Close"), ("prevClose", "PrevClose"), ("volume", "Volume"), ("value", "Value")):
         out[name] = pd.to_numeric(df[c[k]].str.replace(",", ""), errors="coerce")
@@ -231,9 +242,9 @@ def crosscheck(series: dict[str, pd.DataFrame], bhav: pd.DataFrame, tol: dict) -
         spike = jump_in & jump_out & bridge
         step = jump_in & ~spike & ~np.r_[False, spike[:-1]]  # the day after a spike is the return to normal, not a step
         for i in np.flatnonzero(spike):
-            rows.append((t, d[i], "PRICE_SPIKE", float(r[i] / prev[i] - 1), "ratio departs for one day"))
+            rows.append((t, d[i], "PRICE_SPIKE", float(r[i] / prev[i] - 1), f"yahoo {yb.Close.loc[d[i]]:.2f} vs bhav {b[t].Close.loc[d[i]]:.2f}"))
         for i in np.flatnonzero(step):
-            rows.append((t, d[i], "RATIO_BREAK", float(r[i] / prev[i]), "lasting step: split/bonus or an adjustment break"))
+            rows.append((t, d[i], "RATIO_BREAK", float(r[i] / prev[i]), f"yahoo/bhav ratio {prev[i]:.4f} -> {r[i]:.4f}"))
         vr = yb.Volume.loc[both].to_numpy(float) * r
         bv = b[t].Volume.loc[both].to_numpy(float)
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -241,6 +252,62 @@ def crosscheck(series: dict[str, pd.DataFrame], bhav: pd.DataFrame, tol: dict) -
         for i in np.flatnonzero(off & (bv > 0)):
             rows.append((t, d[i], "VOLUME_MISMATCH", float(vr[i] / bv[i] - 1), "report only"))
     return pd.DataFrame(rows, columns=["Ticker", "Date", "Kind", "Value", "Detail"]).sort_values(["Ticker", "Date", "Kind"], ignore_index=True)
+
+
+# --- summary of the cross-check ----------------------------------------------------------------------------------
+NICE_RATIOS = (1.25, 4 / 3, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 20, 50, 100)  # usual split / bonus factors
+
+
+def series_of(cfg: dict, day: str, ticker: str, cache: dict) -> list[str]:
+    """Series the ticker traded in on `day` according to the raw file (all series, not only the kept ones)."""
+    if day not in cache:
+        path = folder(cfg) / "raw" / f"{day}.csv"
+        cache[day] = pd.read_csv(io.StringIO(path.read_text(encoding="utf-8")), dtype=str, keep_default_na=False) if path.exists() else None
+    df = cache[day]
+    if df is None:
+        return ["(no raw file)"]
+    c = cfg["bhav"]["formats"][format_for(cfg, day)]["columns"]
+    hit = df[df[c["symbol"]].str.strip() == ticker]
+    return sorted(set(hit[c["series"]].str.strip())) or ["(symbol absent)"]
+
+
+def counts(s: pd.Series, top: int | None = None) -> dict:
+    """value_counts as a plain dict of ints, for printing."""
+    return {k: int(v) for k, v in (s if top is None else s.head(top)).items()}
+
+
+def summarize(cfg: dict, out: pd.DataFrame, top: int = 8) -> str:
+    """A compact text report of bhav_crosscheck.csv: what the findings are made of."""
+    lines = [f"findings {counts(out.Kind.value_counts())} over {out.Ticker.nunique()} tickers"]
+    out = out.assign(Year=out.Date.str[:4])
+    lines.append("by year: " + "; ".join(f"{k} " + ",".join(f"{y}:{n}" for y, n in g.Year.value_counts().sort_index().items()) for k, g in out.groupby("Kind")))
+    cache: dict = {}
+    for kind in ("NO_BHAV_ROW", "NO_YAHOO_ROW"):
+        g = out[out.Kind == kind]
+        if g.empty:
+            continue
+        per_day = g.Date.value_counts()
+        lines.append(f"{kind}: {len(g)} rows; dates with 10+ tickers (whole-market gaps): {counts(per_day[per_day >= 10], top)}; top tickers {counts(g.Ticker.value_counts(), top)}")
+        if kind == "NO_BHAV_ROW":
+            found = pd.Series([",".join(series_of(cfg, d, t, cache)) for t, d in zip(g.Ticker, g.Date, strict=True)]).value_counts()
+            lines.append(f"  series the missing ticker-days traded in per the raw files: {counts(found, top)}")
+    g = out[out.Kind == "PRICE_SPIKE"]
+    if len(g):
+        per_day = g.Date.value_counts()
+        lines.append(f"PRICE_SPIKE: {len(g)}; |departure| quantiles 50/90/99% = {[round(float(g.Value.abs().quantile(q)), 3) for q in (.5, .9, .99)]}; "
+                     f"dates with 5+ tickers {counts(per_day[per_day >= 5], top)}; top tickers {counts(g.Ticker.value_counts(), top)}")
+        lines.append("  largest: " + " | ".join(f"{r.Ticker} {r.Date} {r.Detail}" for r in g.reindex(g.Value.abs().sort_values(ascending=False).index).head(5).itertuples()))
+    g = out[out.Kind == "RATIO_BREAK"]
+    if len(g):
+        f = g.Value.where(g.Value >= 1, 1 / g.Value)
+        nice = f.apply(lambda v: any(abs(v / n - 1) < 0.015 for n in NICE_RATIOS))
+        lines.append(f"RATIO_BREAK: {len(g)}; {int(nice.sum())} look like split/bonus factors, {int((~nice).sum())} do not; most common step sizes {counts(f.round(2).value_counts(), top)}")
+        odd = g[~nice]
+        lines.append("  not split-like (first 8): " + " | ".join(f"{r.Ticker} {r.Date} {r.Detail}" for r in odd.head(8).itertuples()))
+    g = out[out.Kind == "VOLUME_MISMATCH"]
+    if len(g):
+        lines.append(f"VOLUME_MISMATCH (report only): {len(g)}; median |difference| {float(g.Value.abs().median()):.2f}; top tickers {counts(g.Ticker.value_counts(), top)}")
+    return "\n".join(lines)
 
 
 # --- CLI ---------------------------------------------------------------------------------------------------------
@@ -252,7 +319,7 @@ def client_for(cfg: dict) -> BhavClient:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="backtest.bhav")
     g = parser.add_mutually_exclusive_group(required=True)
-    for flag in ("check", "probe", "download", "build", "crosscheck"):
+    for flag in ("check", "probe", "download", "build", "crosscheck", "summary"):
         g.add_argument(f"--{flag}", action="store_true")
     parser.add_argument("--from", dest="start")
     parser.add_argument("--to", dest="end")
@@ -278,6 +345,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1 if done["failed"] else 0
         if args.build:
             print(f"bhav: built {build(cfg)}")
+            return 0
+        if args.summary:
+            path = Path(cfg["paths"]["data"]) / "bhav_crosscheck.csv"
+            if not path.exists():
+                raise prep.MissingInput("no bhav_crosscheck.csv: run --crosscheck first")
+            print(summarize(cfg, pd.read_csv(path, dtype={"Ticker": str, "Date": str, "Detail": str}, keep_default_na=False)))
             return 0
         data = prep.load_pit(cfg)
         out = crosscheck(data.series, load(cfg, set(data.series)), cfg["bhav"]["crosscheck"])

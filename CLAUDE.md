@@ -20,7 +20,7 @@ Full setup: `app/doc/LOCAL_SETUP.md`.
 
 ## Backtest (sibling `backtest/`, personal use, in progress)
 - Plan: `app/doc/Backtest_Implementation_Plan.md`. Check: `uv run --project backtest python -m backtest.run --check`. Tests: `uv run --project backtest pytest backtest/tests`.
-- Stages: `backtest.prep --check|--dividends|--scan`, `backtest.run --single`, `backtest.surv_proxy --snapshot|--calibrate`, `backtest.bench [--years N --profile --workers K]` (runtime spike), `backtest.bhav --check|--probe|--download|--build|--crosscheck` (NSE bhavcopy; needs a passed `--probe` on a machine that can reach NSE). Parameter bounds: `backtest/config/params.json` (unconfirmed until you set `confirmed`).
+- Stages: `backtest.prep --check|--dividends|--scan`, `backtest.run --single`, `backtest.surv_proxy --snapshot|--calibrate`, `backtest.bench [--years N --profile --workers K]` (runtime spike), `backtest.bhav --check|--probe|--download|--build|--crosscheck|--summary` (NSE bhavcopy; needs a passed `--probe` on a machine that can reach NSE). Parameter bounds: `backtest/config/params.json` (unconfirmed until you set `confirmed`).
 - Reads `app/` and `app/data/` only; never writes them. Not copied into any Docker image.
 
 ## Exit codes

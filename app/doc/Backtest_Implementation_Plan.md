@@ -182,3 +182,7 @@ The poor scaling is not seen on the 4-core cloud box (4 workers: 1.0x slowdown),
 | 8 | 1.55x, 5.1x | 3.61x, 2.2x |
 
 (slowdown of the slowest worker, throughput). Decision: every process pool uses `backtest/workers.py` (`limit_threads()` in the parent, `init_worker()` in each worker). At 8 workers the strict gate (30 tried points, 130 simulations) is projected at 2.6 h instead of 5.9 h; one worker needs 13 h. A single 14.8-year run is about 6 minutes (104 ms per session). The gain from 6 to 8 workers is small, so 10 or 12 workers will probably add little (not measured).
+
+### Bhavcopy on your PC: first complete run
+
+Probe passed on all six sample days. Download cached 4,698 trading days (2,151 fetched in the last run plus 2,547 cached); one day failed: 2020-07-13 writes dates as `13-Jul-20`. Fixed (a two-digit year is read with `%y`). Build: 20 yearly Parquet files, 78k rows for 2007 up to 530k for 2025. Cross-check totals: NO_BHAV_ROW 1,488, NO_YAHOO_ROW 1,014, VOLUME_MISMATCH 611, PRICE_SPIKE 544, RATIO_BREAK 366. `--summary` explains what they are made of (series the missing days traded in, whole-market gaps, which breaks look like real split/bonus factors). One hypothesis to test before trusting any total: `seriesKeep` is `["EQ"]`, so a ticker-day in series BE/BZ (trade-for-trade) would show as NO_BHAV_ROW.

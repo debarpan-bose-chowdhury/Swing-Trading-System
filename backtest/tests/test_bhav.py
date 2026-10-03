@@ -216,3 +216,40 @@ class CliTests(TreeCase):
         self.assertEqual(bhav.main(["--check"]), 0)
         self.assertEqual(bhav.main(["--download"]), 3)
         self.assertFalse(Path("backtest/data").exists())
+
+
+class DateAndSummaryTests(TreeCase):
+    def setUp(self):
+        super().setUp()
+        self.cfg = json.loads(json.dumps(CFG))
+        self.cfg["paths"]["data"] = "backtest/data"
+
+    def test_two_digit_year_dates_are_read(self):
+        text = legacy_text("2020-07-13", [("AAA", "EQ", 10.0, 5)]).replace("13-JUL-2020", "13-Jul-20")
+        got = bhav.parse(text, self.cfg["bhav"]["formats"]["legacy"], ["EQ"], "2020-07-13")
+        self.assertEqual(got.Date[0], "2020-07-13")
+
+    def test_summary_explains_missing_rows_from_the_raw_series_and_classifies_breaks(self):
+        raw = Path("backtest/data/bhav/raw")
+        raw.mkdir(parents=True)
+        (raw / "2020-03-02.csv").write_text(legacy_text("2020-03-02", [("AAA", "BE", 10.0, 5), ("BBB", "EQ", 10.0, 5)]), encoding="utf-8")
+        out = pd.DataFrame([
+            ("AAA", "2020-03-02", "NO_BHAV_ROW", 0.0, ""), ("CCC", "2020-03-02", "NO_BHAV_ROW", 0.0, ""),
+            ("BBB", "2020-04-01", "RATIO_BREAK", 2.0, "yahoo/bhav ratio 1.0000 -> 2.0000"), ("BBB", "2020-05-01", "RATIO_BREAK", 1.37, "yahoo/bhav ratio 1.0000 -> 1.3700"),
+            ("BBB", "2020-06-01", "PRICE_SPIKE", 0.2, "yahoo 12.00 vs bhav 10.00"), ("BBB", "2020-06-02", "VOLUME_MISMATCH", 0.5, "report only")],
+            columns=["Ticker", "Date", "Kind", "Value", "Detail"])
+        text = bhav.summarize(self.cfg, out)
+        self.assertIn("'BE': 1", text)  # AAA traded in series BE that day: the EQ-only filter hid it
+        self.assertIn("(symbol absent)", text)  # CCC has no row at all in that day's file
+        self.assertIn("1 look like split/bonus factors, 1 do not", text)
+        self.assertIn("PRICE_SPIKE: 1", text)
+        self.assertIn("VOLUME_MISMATCH (report only): 1", text)
+
+    def test_crosscheck_details_carry_the_prices(self):
+        days = weekdays("2024-01-01", 20)
+        raw = np.linspace(100, 110, 20)
+        b = pd.DataFrame({"Ticker": "AAA", "Date": days, "Series": "EQ", "Open": raw, "High": raw, "Low": raw, "Close": raw, "PrevClose": raw, "Volume": 1000.0, "Value": 1.0, "Isin": ""})
+        y = bars("AAA", days, raw.copy(), volume=1000)
+        y.loc[5, "Close"] *= 1.05
+        out = bhav.crosscheck({"AAA": y}, b, {"closeTolerance": 0.005, "volumeTolerance": 0.10})
+        self.assertRegex(out[out.Kind == "PRICE_SPIKE"].Detail.iloc[0], r"yahoo \d+\.\d\d vs bhav \d+\.\d\d")
