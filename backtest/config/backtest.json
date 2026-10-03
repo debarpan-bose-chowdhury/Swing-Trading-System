@@ -51,7 +51,7 @@
   },
   "universe": {
     "mode": "today",
-    "adjustValidated": false,
+    "adjustValidated": true,
     "rankWindow": 120,
     "rankMinObs": 60,
     "scopeTop": 250,
@@ -59,7 +59,7 @@
     "excludePattern": "-RE\\d*$",
     "symbolChange": { "url": "https://nsearchives.nseindia.com/content/equities/symbolchange.csv",
                       "layout": { "fromEnd": { "old": 3, "new": 2, "date": 1 }, "dateFormat": "%d-%b-%Y" } },
-    "adjust": { "minMove": 0.30, "niceTolerance": 0.08, "volumeWindow": 10, "volumeTolerance": 0.80, "minPost": 5, "tightTolerance": 0.05, "crashSpike": 4.0 },
+    "adjust": { "minMove": 0.30, "niceTolerance": 0.10, "volumeWindow": 10, "volumeTolerance": 0.80, "minPost": 5, "tightTolerance": 0.10, "crashSpike": 4.0 },
     "vanishHaircuts": [0.5, 1.0]
   },
   "compute": { "workers": 8, "seed": 1 },

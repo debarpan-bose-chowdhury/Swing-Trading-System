@@ -125,6 +125,7 @@ class BuildTests(TreeCase):
     def test_pit_mode_is_refused_until_the_adjustment_is_validated(self):
         shutil_cfg = copy.deepcopy(self.cfg)
         shutil_cfg["universe"]["mode"] = "pit"
+        shutil_cfg["universe"]["adjustValidated"] = False
         for t, d in (("BIG", self.yahoo["BIG"]),):
             self.eq.rebuild(t, d)
         self.idx.rebuild("NSEI", self.yahoo["BIG"].assign(Ticker="^NSEI"))
