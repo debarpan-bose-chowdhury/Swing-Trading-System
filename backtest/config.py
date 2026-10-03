@@ -60,6 +60,15 @@ def validate(cfg: dict) -> None:
     pr = cfg["prep"]
     if not (_is_date(pr["dividendsFrom"]) and _num(pr["bigMovePct"], 0, 1) and _num(pr["dividendStepMin"], 0, 1) and _num(pr["dividendTolerance"], 0, 1)):
         raise ValueError("prep: dividendsFrom an ISO date; bigMovePct, dividendStepMin, dividendTolerance in [0, 1]")
+    bh = cfg["bhav"]
+    cols = {"symbol", "series", "open", "high", "low", "close", "prevClose", "volume", "value", "isin"}
+    if not (_is_date(bh["from"]) and bh["seriesKeep"] and all(isinstance(x, str) for x in bh["seriesKeep"])
+            and _is_date(bh["formats"]["legacy"]["until"]) and _is_date(bh["formats"]["udiff"]["from"])
+            and bh["formats"]["legacy"]["until"] < bh["formats"]["udiff"]["from"]
+            and all(set(f["columns"]) == cols and "{" in f["url"] for f in bh["formats"].values())
+            and all(_num(bh["crosscheck"][k], 0, 1) for k in ("closeTolerance", "volumeTolerance"))
+            and _num(bh["client"]["gapSeconds"]) and _is_date(bh["probeDays"]["legacy"]) and _is_date(bh["probeDays"]["udiff"])):
+        raise ValueError("bhav: from/probe dates ISO, seriesKeep non-empty, legacy.until before udiff.from, both formats map every column, tolerances in [0, 1]")
     c = cfg["compute"]
     if not (isinstance(c["workers"], int) and 1 <= c["workers"] <= 8 and isinstance(c["seed"], int)):
         raise ValueError("compute: workers an integer from 1 to 8, seed an integer")

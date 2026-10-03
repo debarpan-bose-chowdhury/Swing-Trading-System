@@ -135,3 +135,11 @@ Deviations from sections 1 to 7, all decided with you or forced by the code:
 | Strict gate, 30 tried points (134 simulations, 1,791 simulated years) | 9.2 h on one worker, about 1.1 h on 8 workers at ideal scaling |
 
 Where the time goes: about 85% is inside the app's own `decide()`, mostly `monitor.holdings` replaying `stops.stop_path` from each position's track start every day (about 7 open positions per day). Arrow-backed Date strings are not the cause (object dtype saved 4%). Cutting it needs either an incremental stop path (not bit-identical to the app's rolling mean, so the exact-parity tests would need a tolerance) or the screener tier; neither is built.
+
+### Phase 7a: bhavcopy layer (built); universe work waits for real counts
+
+Decided with you: bhavcopy layer first, probe-first formats, bucket rule and dead-name handling decided after the data is in (dead-name rule when it comes: detect breaks, adjust only what a corporate-action file confirms, exclude the rest and list every exclusion).
+
+`python -m backtest.bhav`: `--probe` (one file per format, checks the configured URL and column names; `--download` refuses until both pass), `--download` (resumable raw cache under `backtest/data/bhav/raw/`, 404s remembered), `--build` (one Parquet per year), `--crosscheck [--strict]` (Yahoo vs bhavcopy over every common date: PRICE_SPIKE, RATIO_BREAK = split/bonus step, NO_BHAV_ROW, NO_YAHOO_ROW, VOLUME_MISMATCH report-only). With the whole history cached the check covers every ticker-day, a superset of the approved "anomalies plus 2% sample". Close tolerance 0.5%, volume 10%, as approved. The NSE hosts are not reachable from the cloud, so the URL templates and column names in `backtest.json` stay unverified until `--probe` passes on your PC.
+
+Not built yet (Phase 7b, needs the real counts): point-in-time universe, bucket rule, dead-name corporate-action handling, and feeding dead names' raw prices into `pit.py`.
