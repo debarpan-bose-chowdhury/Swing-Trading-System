@@ -71,10 +71,12 @@ class Result:
     signals: list[dict] = field(default_factory=list)
     warnings: Counter = field(default_factory=Counter)
     targets: dict = field(default_factory=dict)  # rebalance date -> targets dict
+    dividends: list[dict] = field(default_factory=list)
 
 
 def simulate(data: PitData, targets: Targets, risk_cfg: dict, start: str, end: str | None = None, capital: float = 100000.0,
-             surveillance=no_surveillance, keep_signals: bool = False, carry_over_days: int = 7, reference_dir: Path | None = None) -> Result:
+             surveillance=no_surveillance, keep_signals: bool = False, carry_over_days: int = 7, reference_dir: Path | None = None,
+             dividends=None) -> Result:
     """Replay every index trading day from start to end (inclusive) and return the NAV rows, fills and counters.
 
     reference_dir: run decide() through the app's real files and commit() in that folder instead of the in-memory readers. It is
@@ -93,6 +95,8 @@ def simulate(data: PitData, targets: Targets, risk_cfg: dict, start: str, end: s
     with in_memory(mem) if reference_dir is None else nullcontext():
         for asof in days:
             store.asof = asof
+            if dividends is not None:
+                result.dividends += dividends.credit(book, asof)
             queue = [s for s in queue if (date.fromisoformat(asof) - date.fromisoformat(s["asOf"])).days <= carry]
             _, fill_warnings, cash = fillmod.execute(book, risk_cfg["costs"], asof, queue, lambda t: data.open_price(t, asof), carry)
             d = date.fromisoformat(asof)

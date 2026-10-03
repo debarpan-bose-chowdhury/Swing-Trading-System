@@ -9,7 +9,7 @@ import pandas as pd
 
 from app.analyst import common as analyst_common
 from app.risk import common as risk_common
-from backtest import pit, replay
+from backtest import dividends, pit, replay
 from backtest.targets import Targets
 from backtest.tests.test_targets import World
 
@@ -85,6 +85,22 @@ class LookAheadCanary(Replay):
         pd.testing.assert_frame_equal(clean.fills, hit.fills)
         self.assertEqual([s["actions"] for s in clean.signals], [s["actions"] for s in hit.signals])
         self.assertEqual(clean.nav.iloc[-1].to_dict(), full.nav[full.nav.date == t].iloc[0].to_dict())  # ending early changes nothing either
+
+
+class DividendWiring(Replay):
+    def test_dividend_on_a_held_name_lifts_that_days_nav_by_exactly_the_credit(self):
+        base = self.sim()
+        buy = base.fills[base.fills.side == "BUY"].iloc[0]
+        i = self.days.index(buy.trade_date)
+        ex = next(d for d in self.days[i + 1:i + 4] if not ((base.fills.ticker == buy.ticker) & (base.fills.side == "SELL") & (base.fills.trade_date <= d)).any())
+        divs = dividends.Dividends(pd.DataFrame({"Ticker": [buy.ticker], "ExDate": [ex], "Amount": [5.0]}))
+        paid = self.sim(dividends=divs)
+        qty = paid.dividends[0]["qty"]
+        a, b = base.nav.set_index("date").nav, paid.nav.set_index("date").nav
+        self.assertEqual(len(paid.dividends), 1)
+        self.assertAlmostEqual(b[ex] - a[ex], qty * 5.0, delta=0.011)
+        self.assertEqual(list(a[:ex].index[:-1]), list(b[:ex].index[:-1]))
+        self.assertTrue(((a[:ex].iloc[:-1] - b[:ex].iloc[:-1]).abs() < 1e-9).all())  # nothing before the ex-date changes
 
 
 class Seams(Replay):

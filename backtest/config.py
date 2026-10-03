@@ -49,6 +49,14 @@ def validate(cfg: dict) -> None:
     for name, spans in cfg["stress"].items():
         if not spans or not all(len(s) == 2 and _is_date(s[0]) and _is_date(s[1]) and s[0] <= s[1] for s in spans):
             raise ValueError(f"stress.{name}: a list of [start, end] ISO date pairs, start not after end")
+    sv = cfg["surv"]
+    values = [*sv["circuit"].values(), *sv["thin"].values()]
+    if sv["proxy"] and not all(_num(v) and v > 0 for v in values):
+        raise ValueError("surv.proxy is on but a threshold is unset (null): fill circuit and thin from `python -m backtest.surv_proxy --calibrate`")
+    if not all(v is None or _num(v) for v in values):
+        raise ValueError("surv: thresholds are null or numbers")
+    if not all(isinstance(cfg["overrides"].get(k), dict) for k in ("risk", "analyst")):
+        raise ValueError("overrides: risk and analyst must be objects (in-memory edits applied over app/config/*.json)")
     pr = cfg["prep"]
     if not (_is_date(pr["dividendsFrom"]) and _num(pr["bigMovePct"], 0, 1) and _num(pr["dividendStepMin"], 0, 1) and _num(pr["dividendTolerance"], 0, 1)):
         raise ValueError("prep: dividendsFrom an ISO date; bigMovePct, dividendStepMin, dividendTolerance in [0, 1]")

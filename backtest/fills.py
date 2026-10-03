@@ -41,12 +41,14 @@ class Book:
 
     def _apply(self, f: dict) -> None:
         p = self.pos.get(f["ticker"])
+        f["book_entry_date"] = ""
         if f["side"] == "BUY":
             if p is None:
                 p = self.pos[f["ticker"]] = {"qty": 0, "avg": 0.0, "entry_date": f["trade_date"]}
             p["avg"] = (p["qty"] * p["avg"] + f["qty"] * f["price"]) / (p["qty"] + f["qty"])
             p["qty"] += f["qty"]
         elif p is not None:
+            f["book_entry_date"] = p["entry_date"]
             p["qty"] -= min(f["qty"], p["qty"])
             if p["qty"] <= 0:
                 del self.pos[f["ticker"]]

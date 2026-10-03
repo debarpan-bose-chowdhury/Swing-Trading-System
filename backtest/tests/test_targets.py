@@ -40,6 +40,7 @@ def frame(ticker, days, close, volume=1e7):
 
 
 class World(unittest.TestCase):
+    data_dir = "data"  # where the synthetic prices and bucket files go (the single-run test uses app/data)
     """Index with an up, down, up path (so BULL/BEAR/WEAK/TREND all occur) and 13 tickers with gaps, late starts, an early end and thin volume."""
 
     @classmethod
@@ -57,7 +58,7 @@ class World(unittest.TestCase):
         index = np.r_[walk(rng, 450, 0.0015, 0.006, 10000), 0][:-1]
         index = np.r_[index, index[-1] * np.exp(np.cumsum(rng.normal(-0.003, 0.008, 150)))]
         index = np.r_[index, index[-1] * np.exp(np.cumsum(rng.normal(0.002, 0.007, 300)))]
-        market, storage = Path("data/market"), Path("data/storage")
+        market, storage = Path(self.data_dir) / "market", Path(self.data_dir) / "storage"
         storage.mkdir(parents=True)
         eq, idx = Store(market, cutoff=""), Store(market / "indices", cutoff="")
         idx.upsert("NSEI", frame("^NSEI", days, index))
@@ -82,7 +83,7 @@ class World(unittest.TestCase):
         Path("config").mkdir()
         Path("config/config.json").write_text(META, encoding="utf-8")
         Path("config/cal.json").write_text(json.dumps({"holidays": [], "specialSessions": []}), encoding="utf-8")
-        self.data = pit.PitData.load("data", list(BUCKETS))
+        self.data = pit.PitData.load(self.data_dir, list(BUCKETS))
 
     def live(self, as_of: str) -> dict:
         out = io.StringIO()

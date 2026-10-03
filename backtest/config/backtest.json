@@ -20,6 +20,12 @@
     "2020 COVID": [["2020-02-01", "2020-12-31"]],
     "2022 hikes and 2024 election": [["2022-01-01", "2022-12-31"], ["2024-06-03", "2024-06-10"]]
   },
+  "surv": {
+    "proxy": false,
+    "circuit": { "movePct": null, "rangePct": null, "window": null, "minHits": null },
+    "thin": { "window": null, "minValueInr": null }
+  },
+  "overrides": { "risk": {}, "analyst": {} },
   "prep": { "dividendsFrom": "2007-01-01", "bigMovePct": 0.25, "dividendStepMin": 0.002, "dividendTolerance": 0.05 },
   "compute": { "workers": 8, "seed": 1 },
   "paths": { "data": "backtest/data", "appConfig": "app/config", "appData": "app/data", "params": "backtest/config/params.json" }
