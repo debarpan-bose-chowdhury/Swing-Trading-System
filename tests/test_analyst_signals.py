@@ -46,6 +46,7 @@ class Env(unittest.TestCase):
         self.addCleanup(os.chdir, previous)
         self.cfg = copy.deepcopy(CFG)
         self.cfg["placeholders"] = False
+        self.cfg["composition"] = {"LargeCap": 0, "MidCap": 0, "SmallCap": 1}  # pinned: tests must not follow the live config
         self.cfg["paths"] = {k: str(self.root / v) for k, v in {
             "analyst": "data/analyst", "market": "data/market", "upstreamStorage": "data/storage",
             "metadataConfig": "config/config.json", "calendar": "config/cal.json", "seed": "config/seed.csv", "logs": "data/logs"}.items()}

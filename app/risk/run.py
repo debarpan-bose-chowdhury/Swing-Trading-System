@@ -188,7 +188,7 @@ def commit(pf: Portfolio, out: dict, now: datetime) -> Path:
     nav.upsert_nav(pf.nav_file, out["nav_row"])
     path = pf.signals / f"signals_{out['signal']['asOf']}.json"
     if path.exists():
-        path.rename(path.with_name(f"{path.stem}.superseded_{now.strftime('%H%M%S')}.json"))
+        path.replace(path.with_name(f"{path.stem}.superseded_{now.strftime('%H%M%S')}.json"))
     write_json(path, out["signal"])
     return path
 

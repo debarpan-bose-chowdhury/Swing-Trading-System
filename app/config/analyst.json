@@ -1,5 +1,5 @@
 {
-  "placeholders": true,
+  "placeholders": false,
   "broker": {
     "name": "AngelOne",
     "timeoutSeconds": 15,
@@ -12,9 +12,9 @@
     "clientPublicIp": "127.0.0.1",
     "clientMacAddress": "00:00:00:00:00:00"
   },
-  "capital": { "floatingCapitalInr": 0, "ignoreSymbols": [] },
+  "capital": { "floatingCapitalInr": 100000, "ignoreSymbols": [] },
   "limits": { "maxPositionDrawdownPct": 0.17, "maxPortfolioDrawdownPct": 0.5 },
-  "composition": { "LargeCap": 0, "MidCap": 0, "SmallCap": 1 },
+  "composition": { "LargeCap": 0.5, "MidCap": 0.3, "SmallCap": 0.2 },
   "rebalance": { "schedule": "weekly", "execution": "monday_open" },
   "regime": { "index": "^NSEI", "persistenceWeeks": 4, "minRows": 210 },
   "strategies": {

@@ -33,7 +33,12 @@
   "heat": { "capPct": 0.12 },
   "liquidity": { "advDays": 20, "maxParticipationPct": { "LargeCap": 0.01, "MidCap": 0.01, "SmallCap": 0.005 } },
   "surveillance": {
-    "sources": { "asm": "<set after probe>", "gsm": "<set after probe>", "t2t": "<set after probe>", "bands": "<set after probe>" },
+    "sources": {
+      "asm":   {"url": "https://www.nseindia.com/api/reportASM?csv=true",                          "format": "csv", "symbolColumn": "SYMBOL",  "valueColumn": "ASM STAGE"},
+      "gsm":   {"url": "https://www.nseindia.com/api/reportGSM?csv=true",                          "format": "csv", "symbolColumn": "SYMBOL",  "valueColumn": "GSM STAGE"},
+      "t2t":   {"url": "https://nsearchives.nseindia.com/content/equities/series_change.csv",      "format": "csv", "symbolColumn": "Symbol",  "filterColumn": "To Series", "filterValues": ["BE", "BZ"]},
+      "bands": {"url": "https://nsearchives.nseindia.com/content/equities/sec_list.csv",           "format": "csv", "symbolColumn": "Symbol",  "valueColumn": "Band"}
+    },
     "blockEntryBandPct": 5,
     "staleExitDays": 3,
     "exitOn": ["GSM", "T2T"],

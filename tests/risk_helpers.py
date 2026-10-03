@@ -39,7 +39,7 @@ class Env(unittest.TestCase):
     asof = FRIDAY
 
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
+        tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name).resolve()
         previous = os.getcwd()

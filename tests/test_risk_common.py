@@ -20,16 +20,15 @@ from tests.risk_helpers import Env
 class ShippedConfigTests(unittest.TestCase):
     """Run in the repository root: the config that ships in the image."""
 
-    def test_shipped_config_loads_for_run_and_evaluate_but_not_surveillance(self):
+    def test_shipped_config_loads_for_run_evaluate_and_surveillance(self):
         cfg = common.load_config("run")
         self.assertEqual(cfg["buckets"], ["LargeCap", "MidCap", "SmallCap"])
         self.assertIn("brokerage", cfg["costs"])  # the Analyst's cost model, read-only
         common.load_config("evaluate")
-        with self.assertRaisesRegex(ValueError, "surveillance.sources.asm is not configured"):
-            common.load_config("surveillance")
+        common.load_config("surveillance")  # sources are now pre-configured with correct object format
 
     def test_every_stage_check(self):
-        for stage, expected in (("run", 0), ("evaluate", 0), ("surveillance", 1)):
+        for stage, expected in (("run", 0), ("evaluate", 0), ("surveillance", 0)):
             out, err = io.StringIO(), io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                 code = common.check_stage(stage)

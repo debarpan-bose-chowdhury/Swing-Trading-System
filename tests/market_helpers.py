@@ -81,7 +81,7 @@ class Env(unittest.TestCase):
     """Temp dirs, calendar/indices files, no real sleeping, and a scriptable fake Yahoo."""
 
     def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
+        tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name).resolve()
         previous = os.getcwd()
