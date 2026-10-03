@@ -150,7 +150,7 @@ four months selected). The 2nd never coincides with the upstream Cleaner on the 
 
 ### Stock Analyst (weekly targets)
 
-Design: `app/doc/Stock_Analyst_TDD.md` (read its "As-built decisions" first). It reads the Ticker Data prices, the
+Design: `doc/Stock_Analyst_TDD.md` (read its "As-built decisions" first). It reads the Ticker Data prices, the
 Metadata bucket files and the Ledger's book, and writes `app/data/analyst/targets/targets_{rebalance_date}.json` for the
 Risk Manager. It places no orders. Stages: Ledger (broker -> fills, book, journal), Signals (targets) and the broker Probe.
 
@@ -195,7 +195,7 @@ The backups sit on the same disk as the data: also back up the host folder elsew
 
 ### Risk Manager (daily and weekly signals)
 
-Design: `app/doc/Risk_Manager_TDD.md` (read its "As-built decisions" first). It turns the Analyst's weekly target list and the
+Design: `doc/Risk_Manager_TDD.md` (read its "As-built decisions" first). It turns the Analyst's weekly target list and the
 Ledger's book into `app/data/risk/signals/signals_{asOf}.json`: what to buy or sell, how many shares and why. It keeps the account
 inside the limits in `risk.json` and measures how the strategy is doing. **Signals only**: it places no orders, has no order,
 GTT or broker call and holds no Angel One secret. Four blocks share the code: Sizer (weekly quantities, risk-based and capped),
@@ -264,8 +264,8 @@ Until the sources are filled Surveillance exits 1 and Run blocks every buy as `N
 
 Replays the Risk Manager's own `decide()` over NSE history with next-open fills, dividends, a FIFO tax overlay, walk-forward
 windows with a locked holdout, and an overfitting gate. It reads `app/` and `app/data/` and writes only `backtest/data/`
-(git-ignored); it never places orders and is not copied into any image. Design: `app/doc/Backtest_Engine_TDD.md`; decision
-history and measured results: `app/doc/Backtest_Implementation_Plan.md`.
+(git-ignored); it never places orders and is not copied into any image. Design: `doc/Backtest_Engine_TDD.md`; decision
+history and measured results: `doc/Backtest_Implementation_Plan.md`.
 
 ```
 uv run --project backtest python -m backtest.run --check          # config + app side, no network, no writes

@@ -139,7 +139,7 @@ uv run --project backtest python -m backtest.run --single
 uv run --project backtest pytest -c backtest/pyproject.toml    # offline tests
 ```
 
-The point-in-time universe needs NSE bhavcopy downloads (`backtest.bhav --probe` then `--download`, slow and resumable). Full guide: `app/doc/Backtest_Engine_TDD.md`.
+The point-in-time universe needs NSE bhavcopy downloads (`backtest.bhav --probe` then `--download`, slow and resumable). Full guide: `doc/Backtest_Engine_TDD.md`.
 
 ## 11. Troubleshooting
 
