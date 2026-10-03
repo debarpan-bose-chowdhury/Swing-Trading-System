@@ -49,6 +49,16 @@
       }
     }
   },
+  "universe": {
+    "mode": "today",
+    "rankWindow": 120,
+    "rankMinObs": 60,
+    "scopeTop": 250,
+    "symbolMap": "backtest/config/symbol_map.csv",
+    "symbolChange": { "url": "https://nsearchives.nseindia.com/content/equities/symbolchange.csv", "columns": null },
+    "adjust": { "quietTolerance": 0.003, "niceTolerance": 0.02, "cashMin": 0.80 },
+    "vanishHaircuts": [0.5, 1.0]
+  },
   "compute": { "workers": 8, "seed": 1 },
   "paths": { "data": "backtest/data", "appConfig": "app/config", "appData": "app/data", "params": "backtest/config/params.json" }
 }
