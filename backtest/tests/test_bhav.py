@@ -279,5 +279,27 @@ class SeriesAndBasisTests(TreeCase):
         pd.DataFrame({"Ticker": ["AAA"], "ExDate": [days[20]], "Amount": [3.0]}).to_csv("backtest/data/dividends.csv", index=False)
         text = "\n".join(bhav.adjustment_basis(self.cfg, out, data))
         self.assertIn("below 0.99 for 1 of 1", text)
-        self.assertIn("AdjClose/Close step in the stored data: 1", text)
-        self.assertIn("Yahoo dividend ex-date: 1", text)
+        self.assertIn("coincide with an AdjClose/Close step: 1", text)
+        self.assertIn("Yahoo dividends: 1 on the same date, 1 within 3 days", text)
+
+
+class UniverseStatsTests(TreeCase):
+    def test_counts_names_that_stopped_and_the_survivors_among_each_years_top_names(self):
+        cfg = json.loads(json.dumps(CFG))
+        cfg["paths"]["data"] = "backtest/data"
+        out = Path("backtest/data/bhav")
+        out.mkdir(parents=True)
+        for year, a, b in ((2020, "2020-01-01", 260), (2021, "2021-01-01", 260), (2022, "2022-01-03", 260), (2023, "2023-01-02", 260)):
+            days = [d.date().isoformat() for d in pd.bdate_range(a, periods=b) if d.year == year]
+            rows = []
+            for t, val in (("BIG", 900.0), ("MID", 500.0), ("DEAD", 800.0), ("TINY", 1.0)):
+                if t == "DEAD" and year >= 2022:
+                    continue  # stops trading at the end of 2021
+                rows += [(t, d, val) for d in days]
+            pd.DataFrame(rows, columns=["Ticker", "Date", "Value"]).to_parquet(out / f"bhav_{year}.parquet", index=False)
+        text = bhav.universe_stats(cfg, {"BIG", "MID"}, top_n=3, window=100, minimum=50)
+        self.assertIn("4 symbols ever traded", text)
+        self.assertIn("1 do not", text)
+        self.assertIn("{'2021': 1}", text)
+        self.assertIn("2021: 3 ranked, 2 still trade (67%), 2 are in today's universe; gone e.g. ['DEAD']", text)
+        self.assertIn("2022: 3 ranked, 3 still trade (100%)", text)

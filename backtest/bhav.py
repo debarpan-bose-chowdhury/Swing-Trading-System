@@ -6,6 +6,7 @@
   python -m backtest.bhav --build                     parse the raw cache into backtest/data/bhav/bhav_<year>.parquet
   python -m backtest.bhav --crosscheck [--strict]     compare the Yahoo prices in app/data with bhavcopy -> backtest/data/bhav_crosscheck.csv
   python -m backtest.bhav --summary                   what the cross-check findings are made of (short text to read or paste)
+  python -m backtest.bhav --universe-stats            how many top-traded names of past year ends are gone today (survivorship, measured)
 
 The URL templates and column names are unverified until --probe passes on your PC (the NSE hosts are not reachable from the cloud).
 Reads app/data read-only; every output is under backtest/data/. Exit codes: 0 ok, 1 failed, 3 a gate is not met (probe not passed,
@@ -281,31 +282,56 @@ def counts(s: pd.Series, top: int | None = None) -> dict:
 SMALL_STEP = (1.003, 1.08)  # step sizes that dividends or rights-issue adjustments produce, not splits
 
 
+def near(day: str, days: list[str], k: int = 3) -> bool:
+    """True when an event date lies within k calendar days of `day` (ex-dates are booked a day or two apart by different sources)."""
+    d = pd.Timestamp(day)
+    return any(abs((pd.Timestamp(x) - d).days) <= k for x in days)
+
+
 def adjustment_basis(cfg: dict, out: pd.DataFrame, data) -> list[str]:
-    """Is the stored Yahoo Close price-only or already dividend-adjusted? Compare small ratio breaks with Yahoo dividend ex-dates and
-    with steps in AdjClose/Close, and look at how far AdjClose sits from Close at the start of each series."""
-    lines = []
+    """Is the stored Yahoo Close price-only or already dividend-adjusted, and what are the small (1-8%) ratio breaks?
+
+    Compares each small break with Yahoo dividend and split dates (exact and within 3 days) and with steps in AdjClose/Close,
+    and shows how long the new ratio level lasts and when they happen.
+    """
     first = pd.Series({t: float(df.AdjClose.iloc[0] / df.Close.iloc[0]) for t, df in data.series.items() if len(df)})
-    lines.append(f"AdjClose/Close at each series' first row: below 0.99 for {int((first < 0.99).sum())} of {len(first)} tickers, median {first.median():.3f}"
-                 " (a price-only Close gives values below 1 for dividend payers; all 1.000 would mean Close is already dividend-adjusted)")
+    lines = [f"AdjClose/Close at each series' first row: below 0.99 for {int((first < 0.99).sum())} of {len(first)} tickers, median {first.median():.3f}"
+             " (a price-only Close gives values below 1 for dividend payers; all 1.000 would mean Close is already dividend-adjusted)"]
     g = out[out.Kind == "RATIO_BREAK"]
     f = g.Value.where(g.Value >= 1, 1 / g.Value)
     small = g[(f > SMALL_STEP[0]) & (f < SMALL_STEP[1])]
     if small.empty:
         return lines
-    path = Path(cfg["paths"]["data"]) / "dividends.csv"
-    ex = set(zip(*[pd.read_csv(path, dtype=str)[c] for c in ("Ticker", "ExDate")])) if path.exists() else None
-    adj_step = 0
+    events = {}
+    for name in ("dividends", "splits"):
+        path = Path(cfg["paths"]["data"]) / f"{name}.csv"
+        if path.exists():
+            events[name] = {t: list(x.ExDate) for t, x in pd.read_csv(path, dtype={"Ticker": str, "ExDate": str}).groupby("Ticker")}
+    adj_step, lasting, hits = 0, 0, {k: [0, 0] for k in events}  # per event kind: [exact, within 3 days]
+    nothing = []
     for r in small.itertuples():
         df = data.series.get(r.Ticker)
-        if df is None:
-            continue
-        i = int(np.searchsorted(df.Date.to_numpy(), r.Date))
-        if 0 < i < len(df) and i < len(df) and df.Date.iloc[i] == r.Date:
+        i = int(np.searchsorted(df.Date.to_numpy(), r.Date)) if df is not None else 0
+        if df is not None and 0 < i < len(df):
             a = df.AdjClose.to_numpy(float) / df.Close.to_numpy(float)
             adj_step += abs(a[i] / a[i - 1] - 1) > 0.002
-    lines.append(f"small ratio breaks (1-8%): {len(small)}; coincide with an AdjClose/Close step in the stored data: {int(adj_step)}; "
-                 + (f"coincide with a Yahoo dividend ex-date: {sum((r.Ticker, r.Date) in ex for r in small.itertuples())}" if ex is not None else "dividends.csv not found (run prep --dividends)"))
+        later = out[(out.Ticker == r.Ticker) & (out.Kind == "RATIO_BREAK") & (out.Date > r.Date)].Date
+        lasting += (not len(later)) or (pd.Timestamp(later.min()) - pd.Timestamp(r.Date)).days > 7
+        matched = False
+        for k, ev in events.items():
+            days = ev.get(r.Ticker, [])
+            hits[k][0] += r.Date in days
+            hits[k][1] += near(r.Date, days)
+            matched |= near(r.Date, days)
+        if not matched:
+            nothing.append(r)
+    lines.append(f"small ratio breaks (1-8%): {len(small)}; last more than 7 days: {int(lasting)}; coincide with an AdjClose/Close step: {int(adj_step)}")
+    for k, (exact, within) in hits.items():
+        lines.append(f"  Yahoo {k}: {exact} on the same date, {within} within 3 days")
+    if not events:
+        lines.append("  dividends.csv / splits.csv not found (run prep --dividends)")
+    lines.append(f"  explained by neither: {len(nothing)}; by year {counts(pd.Series([r.Date[:4] for r in nothing]).value_counts().sort_index())}")
+    lines.append("  examples: " + " | ".join(f"{r.Ticker} {r.Date} {r.Detail}" for r in nothing[:6]))
     return lines
 
 
@@ -348,6 +374,38 @@ def summarize(cfg: dict, out: pd.DataFrame, top: int = 8, data=None) -> str:
     return "\n".join(lines)
 
 
+# --- how many names disappear ---------------------------------------------------------------------------------------
+def universe_stats(cfg: dict, current: set[str], top_n: int = 150, window: int = 120, minimum: int = 60) -> str:
+    """Survivorship, measured: at each year end rank every bhavcopy name by its median traded value over the last `window` sessions,
+    take the top `top_n`, and count how many still trade today and how many are in today's universe. Symbols are matched by name, so a
+    renamed company counts as gone (a bias against survival, listed in the notes)."""
+    files = sorted(folder(cfg).glob("bhav_????.parquet"))
+    if not files:
+        raise prep.MissingInput("no bhav_<year>.parquet files: run --download then --build")
+    df = pd.concat([pd.read_parquet(f, columns=["Ticker", "Date", "Value"]) for f in files], ignore_index=True)
+    last = df.groupby("Ticker").Date.max()
+    first = df.groupby("Ticker").Date.min()
+    today = df.Date.max()
+    alive = set(last[last >= str((pd.Timestamp(today) - pd.Timedelta(days=30)).date())].index)
+    dates = np.array(sorted(df.Date.unique()))
+    lines = [f"{len(last)} symbols ever traded (series kept: {','.join(cfg['bhav']['seriesKeep'])}); {len(alive)} trade today ({today}); {len(last) - len(alive)} do not",
+             "last trading year of the symbols that stopped: " + str(counts(last[~last.index.isin(alive)].str[:4].value_counts().sort_index()))]
+    rows = []
+    for year in range(int(dates[0][:4]) + 1, int(today[:4])):
+        end = dates[dates <= f"{year}-12-31"][-1]
+        win = dates[dates <= end][-window:]
+        sub = df[df.Date.isin(win)]
+        med = sub.groupby("Ticker").Value.agg(["median", "count"])
+        top = med[med["count"] >= minimum].sort_values("median", ascending=False).head(top_n).index
+        gone = [t for t in top if t not in alive]
+        rows.append((year, len(top), len(top) - len(gone), sum(t in current for t in top), gone))
+    lines.append(f"top {top_n} by median traded value over {window} sessions at each year end -> still trading today / in today's universe ({len(current)} names):")
+    for year, n, survivors, in_current, gone in rows:
+        lines.append(f"  {year}: {n} ranked, {survivors} still trade ({100 * survivors / n:.0f}%), {in_current} are in today's universe; gone e.g. {gone[:5]}")
+    lines.append("note: matched by symbol, so a renamed company counts as gone; early files have no ISIN to tell the two apart")
+    return "\n".join(lines)
+
+
 # --- CLI ---------------------------------------------------------------------------------------------------------
 def client_for(cfg: dict) -> BhavClient:
     c = cfg["bhav"]["client"]
@@ -357,7 +415,7 @@ def client_for(cfg: dict) -> BhavClient:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="backtest.bhav")
     g = parser.add_mutually_exclusive_group(required=True)
-    for flag in ("check", "probe", "download", "build", "crosscheck", "summary"):
+    for flag in ("check", "probe", "download", "build", "crosscheck", "summary", "universe-stats"):
         g.add_argument(f"--{flag}", action="store_true")
     parser.add_argument("--from", dest="start")
     parser.add_argument("--to", dest="end")
@@ -383,6 +441,10 @@ def main(argv: list[str] | None = None) -> int:
             return 1 if done["failed"] else 0
         if args.build:
             print(f"bhav: built {build(cfg)}")
+            return 0
+        if args.universe_stats:
+            data = prep.load_pit(cfg)
+            print(universe_stats(cfg, set(data.series)))
             return 0
         if args.summary:
             path = Path(cfg["paths"]["data"]) / "bhav_crosscheck.csv"
