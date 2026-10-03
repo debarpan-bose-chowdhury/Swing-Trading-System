@@ -53,6 +53,19 @@ class RawRegimeTests(unittest.TestCase):
         self.assertTrue((raw.iloc[:209] == "Unknown").all())
         self.assertNotEqual(raw.iloc[209], "Unknown")
 
+    def test_default_windows_equal_explicit_50_200_63(self):
+        close = series([1000 + 3 * i + (i % 7) * 5 for i in range(400)])
+        pd.testing.assert_series_equal(regime.raw_regimes(close), regime.raw_regimes(close, (50, 200, 63)))
+
+    def test_slower_window_extends_the_unknown_period(self):
+        raw = regime.raw_regimes(series([1000 + i for i in range(400)]), (50, 300, 63))
+        self.assertTrue((raw.iloc[:309] == "Unknown").all())
+        self.assertNotEqual(raw.iloc[309], "Unknown")
+
+    def test_windows_come_from_config_with_defaults(self):
+        self.assertEqual(regime.windows_of({"regime": {}}), (50, 200, 63))
+        self.assertEqual(regime.windows_of({"regime": {"smaFast": 20, "smaSlow": 100, "momentumDays": 40}}), (20, 100, 40))
+
     def test_equal_to_the_average_counts_as_not_above(self):
         self.assertEqual(self.last([1000] * 250), "BEAR")
 

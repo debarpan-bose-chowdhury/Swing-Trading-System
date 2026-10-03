@@ -88,6 +88,11 @@ def validate(cfg: dict) -> None:
         raise ValueError("selector: maxMissingShare must be 0..1 and maxBucketFileAgeDays an integer of 0 or more")
     if not _int(cfg["regime"]["minRows"], 1):
         raise ValueError("regime.minRows must be an integer of 1 or more")
+    fast, slow, mom = (cfg["regime"].get(k, d) for k, d in (("smaFast", 50), ("smaSlow", 200), ("momentumDays", 63)))
+    if not (_int(fast, 1) and _int(slow, 1) and _int(mom, 1) and fast < slow):
+        raise ValueError("regime: smaFast < smaSlow and momentumDays must be integers of 1 or more")
+    if cfg["regime"]["minRows"] < max(slow, mom) + 10:
+        raise ValueError("regime.minRows must be at least max(smaSlow, momentumDays) + 10, or the regime is always Unknown")
     sig = cfg["signals"]
     if not (_int(sig["retryEveryMinutes"], 1) and _int(sig["maxHoldingsSnapshotAgeDays"], 0) and _int(sig["targetsRetentionWeeks"], 1)):
         raise ValueError("signals: retryEveryMinutes >= 1, maxHoldingsSnapshotAgeDays >= 0, targetsRetentionWeeks >= 1 must be integers")

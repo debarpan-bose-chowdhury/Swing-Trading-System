@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swing-trading-backtest"
+version = "0.1.0"
+description = "Backtest engine for the Swing-Trading-System (personal use)"
+requires-python = ">=3.12"
+dependencies = ["swing-trading-system", "numpy", "pandas>=3.0", "pyarrow>=20"]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.uv.sources]
+swing-trading-system = { path = "..", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".."]
+
+[tool.setuptools]
+packages = []
