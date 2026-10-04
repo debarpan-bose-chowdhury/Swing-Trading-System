@@ -23,6 +23,12 @@ REGIMES = ("BULL", "TREND", "WEAK", "BEAR", "Unknown")
 PLACEHOLDER = "<set after probe>"
 SESSION_FINAL = "20:00"  # a session is final after this IST time (Ticker Data's sessionFinalAfterIST)
 RETRY_MINUTES = 60
+# Defaults of the exposed numbers (Parameter Exposure S1): a missing config key falls back to the value that used to be hardcoded.
+NO_TRADE_FLOOR_PCT = 0.025  # sizing.noTradeBand.floorPct: the no-trade band never goes below this share of NAV
+RUNGS_PER_WEEK = 1  # ladder.reRisk.rungsPerWeek
+RESTART_RUNG_OFFSET = 1  # ladder.restartRungOffset: a restart resumes this many rungs below flat
+CARRY_OVER_DAYS = 7  # shadow.carryOverDays: a signal whose Open was missing is retried for this long
+TRADING_DAYS_PER_YEAR = 252  # evaluator.tradingDaysPerYear
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 FLOW_TYPES = ("OPENING", "DEPOSIT", "WITHDRAWAL", "DIVIDEND", "OTHER")
 TABLES = {  # state/*.csv layouts (all strings on disk): name -> (file, columns)
@@ -87,11 +93,15 @@ def validate(cfg: dict, stage: str) -> None:
     pcts = [sz["riskPerPositionPct"], sz["cashBufferPct"], sz["noTradeBand"]["relative"], sz["noTradeBand"]["absolutePct"], *sz["nameCapPct"].values()]
     if not all(_num(p, 0, 1, open_lo=True) for p in pcts) or not (_num(sz["minNewOrderInr"], 0, open_lo=True) and _num(sz["minAdjustmentInr"], 0, open_lo=True)):
         raise ValueError("sizing: percentages must be in (0, 1] and minNewOrderInr / minAdjustmentInr greater than 0")
+    if not _num(sz["noTradeBand"].get("floorPct", NO_TRADE_FLOOR_PCT), 0, 1):
+        raise ValueError("sizing.noTradeBand.floorPct must be in [0, 1]")
     if not set(analyst["composition"]) <= set(sz["nameCapPct"]):
         raise ValueError("sizing.nameCapPct needs an entry for every bucket in the Analyst's composition")
     st = cfg["stops"]
     if not (_int(st["atrPeriod"], 2) and _num(st["atrMultiplier"], 0, open_lo=True) and st["bucketFallback"] in buckets):
         raise ValueError("stops: atrPeriod an integer of 2 or more, atrMultiplier > 0, bucketFallback a bucket name")
+    if st["atrMethod"] != "sma" or st["priceBasis"] != "AdjClose":
+        raise ValueError("stops.atrMethod and stops.priceBasis: only sma and AdjClose are implemented (changing them has no effect)")
     if set(st["clampPct"]) != set(buckets) or not all(0 < lo < hi < 1 for lo, hi in st["clampPct"].values()):
         raise ValueError("stops.clampPct needs one [lo, hi] per bucket with 0 < lo < hi < 1")
     lv = cfg["ladder"]["levels"]
@@ -102,6 +112,8 @@ def validate(cfg: dict, stage: str) -> None:
     rr, restart = cfg["ladder"]["reRisk"], cfg["ladder"]["restartFrom"]
     if not (set(rr["regimes"]) <= set(REGIMES) and _int(rr["consecutiveWeeks"], 1) and _int(rr["navAboveMinOfPreviousDays"], 1)):
         raise ValueError("ladder.reRisk: known regimes, consecutiveWeeks and navAboveMinOfPreviousDays integers of 1 or more")
+    if not (_int(rr.get("rungsPerWeek", RUNGS_PER_WEEK), 1) and _int(offset := cfg["ladder"].get("restartRungOffset", RESTART_RUNG_OFFSET), 1) and offset <= len(lv)):
+        raise ValueError("ladder: reRisk.rungsPerWeek an integer of 1 or more, restartRungOffset an integer from 1 to the number of levels")
     if restart is not None and not is_date(restart):
         raise ValueError("ladder.restartFrom must be null or an ISO date")
     caps = cfg["exposure"]["regimeCap"]
@@ -128,6 +140,8 @@ def validate(cfg: dict, stage: str) -> None:
             and re.fullmatch(r"\d{2}:\d{2}", g["retryUntil"])):
         raise ValueError("gate: maxMissingShare in [0, 1], maxLedgerLagTradingDays integer, targetsWaitUntil like 'Sun 22:00', retryUntil like '08:00'")
     ev = cfg["evaluator"]
+    if not (_int(ev.get("tradingDaysPerYear", TRADING_DAYS_PER_YEAR), 1) and _int(cfg["shadow"].get("carryOverDays", CARRY_OVER_DAYS), 0)):
+        raise ValueError("evaluator.tradingDaysPerYear >= 1 and shadow.carryOverDays >= 0 must be integers")
     indices = json.loads(Path(cfg["paths"]["indices"]).read_text(encoding="utf-8"))["indices"]
     if ev["benchmark"] not in indices or not _num(ev["riskFreeRatePct"]):
         raise ValueError("evaluator.benchmark must be an index in indices.json and riskFreeRatePct a number of 0 or more")

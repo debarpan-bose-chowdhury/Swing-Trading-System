@@ -9,11 +9,16 @@ import pandas as pd
 
 from app.market.common import iso
 from app.risk import nav as navmod
-from app.risk.common import add_trading_days, read_json, read_table
+from app.risk.common import TRADING_DAYS_PER_YEAR, add_trading_days, read_json, read_table
 from app.risk.tax import TRUSTED, fy
 
-DAYS = 252
+DAYS = TRADING_DAYS_PER_YEAR  # also the length of the trailing252 window (a label, not a scaling)
 POSITION_COLS = ["date", "ticker", "qty", "close", "value", "day_pl", "day_return", "drawdown"]
+
+
+def days_of(cfg: dict) -> int:
+    """Trading days per year for annualising (evaluator.tradingDaysPerYear)."""
+    return cfg["evaluator"].get("tradingDaysPerYear", DAYS)
 
 
 def num(x) -> float | None:
@@ -45,36 +50,36 @@ def drawdown_days(curve: pd.Series) -> int:
     return best
 
 
-def perf(r: pd.Series, rf: float, flows: list | None = None) -> dict:
-    """Return, risk and risk-adjusted figures of a daily return series (index = ISO dates)."""
+def perf(r: pd.Series, rf: float, flows: list | None = None, days: int = DAYS) -> dict:
+    """Return, risk and risk-adjusted figures of a daily return series (index = ISO dates); days = trading days per year."""
     r = r.dropna()
     if len(r) < 2:
         return {}
     curve = (1 + r).cumprod()
     dd = curve / curve.cummax() - 1
     total = float(curve.iloc[-1] - 1)
-    cagr = (1 + total) ** (DAYS / len(r)) - 1 if total > -1 else None
+    cagr = (1 + total) ** (days / len(r)) - 1 if total > -1 else None
     if flows:
         cagr = xirr(flows) if xirr(flows) is not None else cagr
-    ex = r - rf / DAYS
+    ex = r - rf / days
     sd, down = r.std(ddof=1), math.sqrt(float((np.minimum(ex, 0) ** 2).mean()))
     tail = r[r <= r.quantile(0.05)]
     return {k: num(v) for k, v in {
-        "totalReturn": total, "cagr": cagr, "volatility": sd * math.sqrt(DAYS), "maxDrawdown": dd.min(), "drawdownDurationDays": drawdown_days(curve),
+        "totalReturn": total, "cagr": cagr, "volatility": sd * math.sqrt(days), "maxDrawdown": dd.min(), "drawdownDurationDays": drawdown_days(curve),
         "ulcerIndex": math.sqrt(float(((dd * 100) ** 2).mean())), "cvar95": tail.mean(),
-        "sharpe": ex.mean() / sd * math.sqrt(DAYS) if sd else None, "sortino": ex.mean() / down * math.sqrt(DAYS) if down else None,
+        "sharpe": ex.mean() / sd * math.sqrt(days) if sd else None, "sortino": ex.mean() / down * math.sqrt(days) if down else None,
         "calmar": cagr / abs(dd.min()) if cagr is not None and dd.min() < 0 else None}.items()}
 
 
-def versus(r: pd.Series, b: pd.Series, rf: float) -> dict:
+def versus(r: pd.Series, b: pd.Series, rf: float, days: int = DAYS) -> dict:
     """Beta, annualised Jensen's alpha and up / down capture against the benchmark (price index: alpha is flattered)."""
     j = pd.concat([r, b], axis=1, keys=["r", "b"]).dropna()
     if len(j) < 3 or j.b.var() == 0:
         return {}
     beta = j.r.cov(j.b) / j.b.var()
-    d = rf / DAYS
+    d = rf / days
     up, dn = j[j.b > 0], j[j.b < 0]
-    return {k: num(v) for k, v in {"beta": beta, "alphaAnnual": ((j.r - d).mean() - beta * (j.b - d).mean()) * DAYS,
+    return {k: num(v) for k, v in {"beta": beta, "alphaAnnual": ((j.r - d).mean() - beta * (j.b - d).mean()) * days,
                                    "upCapture": up.r.mean() / up.b.mean() if len(up) else None,
                                    "downCapture": dn.r.mean() / dn.b.mean() if len(dn) else None}.items()}
 
@@ -83,10 +88,10 @@ def compound(r: pd.Series) -> float | None:
     return num((1 + r).prod() - 1) if len(r) else None
 
 
-def regime_stats(df: pd.DataFrame, rf: float) -> dict:
+def regime_stats(df: pd.DataFrame, rf: float, days: int = DAYS) -> dict:
     out = {}
     for name, g in df.groupby("regime"):
-        p = perf(g.actual, rf)
+        p = perf(g.actual, rf, days=days)
         out[name] = {"days": len(g), "return": compound(g.actual), "volatility": p.get("volatility"), "maxDrawdown": p.get("maxDrawdown")}
     dominant = max(out, key=lambda k: out[k]["days"]) if out else None
     return {"byRegime": out, "dominant": dominant}
@@ -112,19 +117,19 @@ def windows(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 def window_report(g: pd.DataFrame, navs: pd.DataFrame, cfg: dict) -> dict:
     ev = cfg["evaluator"]
-    rf = ev["riskFreeRatePct"]
+    rf, days = ev["riskFreeRatePct"], ev.get("tradingDaysPerYear", DAYS)
     flows = None
     rows = navs[navs.date.isin(g.index)]
     if len(rows) > 1 and (rows.flow.iloc[1:] != 0).any():  # XIRR from the NAV and the external flows of the window
         flows = [(rows.date.iloc[0], -float(rows.nav.iloc[0]))] + [(d, -float(f)) for d, f in zip(rows.date.iloc[1:], rows.flow.iloc[1:], strict=True) if f] + [(rows.date.iloc[-1], float(rows.nav.iloc[-1]))]
     out = {"observations": len(g), "flags": ["LOW_SAMPLE"] if len(g) < ev["minObs"] else [],
-           "actual": {**perf(g.actual, rf, flows), **versus(g.actual, g.bench, rf)},
-           "shadow": {**perf(g.shadow, rf), **versus(g.shadow, g.bench, rf)}, "benchmark": perf(g.bench, rf),
+           "actual": {**perf(g.actual, rf, flows, days), **versus(g.actual, g.bench, rf, days)},
+           "shadow": {**perf(g.shadow, rf, days=days), **versus(g.shadow, g.bench, rf, days)}, "benchmark": perf(g.bench, rf, days=days),
            "trackingGap": num(compound(g.actual) - compound(g.shadow)) if g.shadow.notna().any() and compound(g.actual) is not None else None}
     bear = g[g.regime == ev["bearRegime"]]
     out["bear"] = {"negativeDaysStrategy": int((g.actual < 0).sum()), "negativeDaysBenchmark": int((g.bench < 0).sum()), "bearDays": len(bear),
                    "strategyCompound": compound(bear.actual), "benchmarkCompound": compound(bear.bench)}
-    out["regime"] = regime_stats(g, rf)
+    out["regime"] = regime_stats(g, rf, days)
     return out
 
 

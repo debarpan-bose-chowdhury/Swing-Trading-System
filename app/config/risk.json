@@ -7,7 +7,7 @@
     "minNewOrderInr": 25000,
     "minAdjustmentInr": 10000,
     "cashBufferPct": 0.02,
-    "noTradeBand": { "relative": 0.25, "absolutePct": 0.025 },
+    "noTradeBand": { "relative": 0.25, "absolutePct": 0.025, "floorPct": 0.025 },
     "countSaleProceeds": true
   },
   "stops": {
@@ -26,8 +26,9 @@
       { "drawdownPct": 0.20, "maxInvestedPct": 0.25 },
       { "drawdownPct": 0.25, "maxInvestedPct": 0.0 }
     ],
-    "reRisk": { "regimes": ["BULL", "TREND"], "consecutiveWeeks": 2, "navAboveMinOfPreviousDays": 20 },
-    "restartFrom": null
+    "reRisk": { "regimes": ["BULL", "TREND"], "consecutiveWeeks": 2, "navAboveMinOfPreviousDays": 20, "rungsPerWeek": 1 },
+    "restartFrom": null,
+    "restartRungOffset": 1
   },
   "exposure": { "regimeCap": { "BULL": 1.0, "TREND": 1.0, "WEAK": 1.0, "BEAR": 1.0, "Unknown": 1.0 } },
   "heat": { "capPct": 0.12 },
@@ -52,8 +53,8 @@
     "rates": { "asOf": "2026-10-02", "stcgPct": 0.20, "ltcgPct": 0.125, "ltcgExemptionInr": 125000, "cessPct": 0.04 }
   },
   "gate": { "maxMissingShare": 0.10, "maxLedgerLagTradingDays": 0, "targetsWaitUntil": "Sun 22:00", "retryUntil": "08:00" },
-  "shadow": { "enabled": true },
-  "evaluator": { "benchmark": "^NSEI", "riskFreeRatePct": 0.055, "riskFreeAsOf": "2026-09-30", "minObs": 60, "statsDay": "Fri", "bearRegime": "BEAR" },
+  "shadow": { "enabled": true, "carryOverDays": 7 },
+  "evaluator": { "benchmark": "^NSEI", "riskFreeRatePct": 0.055, "riskFreeAsOf": "2026-09-30", "tradingDaysPerYear": 252, "minObs": 60, "statsDay": "Fri", "bearRegime": "BEAR" },
   "signals": { "runTime": "21:45", "retentionWeeks": 104 },
   "paths": {
     "risk": "app/data/risk",

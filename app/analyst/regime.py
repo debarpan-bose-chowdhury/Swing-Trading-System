@@ -11,6 +11,7 @@ from app.market.tradingcal import Calendar
 
 UNKNOWN_EXTRA = 9  # with the default 200-day average the first 209 observations are Unknown (slowest window + 9)
 DEFAULT_WINDOWS = (50, 200, 63)  # fast SMA, slow SMA, momentum days
+DEFAULT_MOMENTUM_THRESHOLD = 0.0  # regime.momentumThreshold: the momentum-days return must exceed it for BULL
 HISTORY_COLS = ["date", "raw_regime", "active_regime", "pending_regime", "pending_remaining_days"]
 
 
@@ -31,14 +32,21 @@ def windows_of(cfg: dict) -> tuple[int, int, int]:
     return r.get("smaFast", DEFAULT_WINDOWS[0]), r.get("smaSlow", DEFAULT_WINDOWS[1]), r.get("momentumDays", DEFAULT_WINDOWS[2])
 
 
-def raw_regimes(close: pd.Series, windows: tuple[int, int, int] = DEFAULT_WINDOWS) -> pd.Series:
-    """BULL / TREND / WEAK / BEAR for every date (Unknown for the first max(slow, momentum) + 9 observations, 209 by default)."""
+def shape_of(cfg: dict) -> dict:
+    """Keyword arguments of raw_regimes / regime_history from the regime block (momentumThreshold, unknownExtra); a missing key keeps its default."""
+    r = cfg["regime"]
+    return {"momentum_threshold": r.get("momentumThreshold", DEFAULT_MOMENTUM_THRESHOLD), "unknown_extra": r.get("unknownExtra", UNKNOWN_EXTRA)}
+
+
+def raw_regimes(close: pd.Series, windows: tuple[int, int, int] = DEFAULT_WINDOWS, momentum_threshold: float = DEFAULT_MOMENTUM_THRESHOLD,
+                unknown_extra: int = UNKNOWN_EXTRA) -> pd.Series:
+    """BULL / TREND / WEAK / BEAR for every date (Unknown for the first max(slow, momentum) + unknown_extra observations, 209 by default)."""
     fast, slow, mom = windows
     above_slow = close > close.rolling(slow).mean()
     above_fast = close > close.rolling(fast).mean()
-    up = close.pct_change(mom) > 0
+    up = close.pct_change(mom) > momentum_threshold
     raw = np.select([above_slow & above_fast & up, above_slow, above_fast], ["BULL", "TREND", "WEAK"], "BEAR").astype(object)
-    raw[:max(slow, mom) + UNKNOWN_EXTRA] = "Unknown"
+    raw[:max(slow, mom) + unknown_extra] = "Unknown"
     return pd.Series(raw, index=close.index)
 
 
@@ -73,6 +81,6 @@ def weekly_state(raw: pd.Series, persistence: int) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=HISTORY_COLS)
 
 
-def regime_history(close: pd.Series, persistence: int, windows: tuple[int, int, int] = DEFAULT_WINDOWS) -> pd.DataFrame:
-    raw = raw_regimes(close, windows)
+def regime_history(close: pd.Series, persistence: int, windows: tuple[int, int, int] = DEFAULT_WINDOWS, **shape) -> pd.DataFrame:
+    raw = raw_regimes(close, windows, **shape)
     return weekly_state(raw[rebalance_dates(close.index)], persistence)

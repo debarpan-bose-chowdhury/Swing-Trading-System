@@ -39,7 +39,8 @@ def build(result, taxes: dict, post: pd.Series, risk_cfg: dict, bt_cfg: dict, su
     rf = risk_cfg["evaluator"]["riskFreeRatePct"]
     nav = result.nav
     pre = pd.Series(nav.nav.to_numpy(float), index=nav.date)
-    perf_pre, perf_post = evaluator.perf(_returns(pre), rf), evaluator.perf(_returns(post), rf)
+    days = evaluator.days_of(risk_cfg)
+    perf_pre, perf_post = evaluator.perf(_returns(pre), rf, days=days), evaluator.perf(_returns(post), rf, days=days)
     bench = pd.Series(nav.bench_close.to_numpy(float), index=nav.date)
     f = result.fills
     avg_nav = float(nav.nav.mean())
@@ -52,7 +53,7 @@ def build(result, taxes: dict, post: pd.Series, risk_cfg: dict, bt_cfg: dict, su
                   + (["Surveillance: PROVISIONAL price-behaviour proxy"] if surv_on else ["Surveillance NOT modelled (entries allowed, nothing flagged)"]),
         "window": {"start": nav.date.iloc[0], "end": nav.date.iloc[-1], "days": len(nav)},
         "objectives": {"postTaxCagr": perf_post.get("cagr"), "maxDrawdown": perf_post.get("maxDrawdown"), "ulcerIndex": perf_post.get("ulcerIndex")},
-        "preTax": perf_pre, "postTax": perf_post, "benchmark": evaluator.perf(_returns(bench), rf),
+        "preTax": perf_pre, "postTax": perf_post, "benchmark": evaluator.perf(_returns(bench), rf, days=days),
         "trades": {"fills": len(f), "turnover": round(traded / 2 / avg_nav, 4) if avg_nav else None,
                    "costDrag": round(float(f.charges.sum()) / avg_nav, 6) if len(f) and avg_nav else 0.0},
         "exposure": {"timeInMarket": round(float((nav.positions_value > 0).mean()), 4)},

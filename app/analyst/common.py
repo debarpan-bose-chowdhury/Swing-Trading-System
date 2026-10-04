@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
+from app.analyst.regime import UNKNOWN_EXTRA
 from app.market.common import IST, Busy, atomic, iso, require_parquet_engine, safe_path
 from app.market.tradingcal import Calendar
 
@@ -82,8 +83,17 @@ def validate(cfg: dict) -> None:
         raise ValueError("selector.momentumSkipDays must be an integer of 0 or more")
     if not (_int(sel["liquidity"]["windowDays"], 1) and _num(sel["liquidity"]["minAdvCr"]) and sel["liquidity"]["statistic"] in ("median", "mean")):
         raise ValueError("selector.liquidity: windowDays >= 1, minAdvCr >= 0, statistic median or mean")
-    if set(sel["bearScore"]) != {"mom20", "mom63", "hit20", "vol20", "dd63"} or not all(_num(v, -1e9) for v in sel["bearScore"].values()):
+    bear = sel["bearScore"]
+    weights = {k: v for k, v in bear.items() if k not in ("windows", "confirmThreshold")}
+    if set(weights) != {"mom20", "mom63", "hit20", "vol20", "dd63"} or not all(_num(v, -1e9) for v in weights.values()):
         raise ValueError("selector.bearScore needs numeric weights for mom20, mom63, hit20, vol20, dd63")
+    windows = bear.get("windows", {})
+    if not (set(windows) <= {"shortDays", "longDays", "hitDays", "volDays", "ddDays"} and all(_int(v, 2) for v in windows.values())):
+        raise ValueError("selector.bearScore.windows: only shortDays, longDays, hitDays, volDays, ddDays, integers of 2 or more")
+    if not _num(bear.get("confirmThreshold", 0.0), -1):
+        raise ValueError("selector.bearScore.confirmThreshold must be a number of -1 or more")
+    if not (_num(sel.get("minMomentum", 0.0), -1) and _num(sel.get("trendBuffer", 0.0), -1)):
+        raise ValueError("selector.minMomentum and selector.trendBuffer must be numbers of -1 or more")
     if not (_num(sel["maxMissingShare"]) and sel["maxMissingShare"] <= 1 and _int(sel["maxBucketFileAgeDays"], 0)):
         raise ValueError("selector: maxMissingShare must be 0..1 and maxBucketFileAgeDays an integer of 0 or more")
     if not _int(cfg["regime"]["minRows"], 1):
@@ -91,8 +101,11 @@ def validate(cfg: dict) -> None:
     fast, slow, mom = (cfg["regime"].get(k, d) for k, d in (("smaFast", 50), ("smaSlow", 200), ("momentumDays", 63)))
     if not (_int(fast, 1) and _int(slow, 1) and _int(mom, 1) and fast < slow):
         raise ValueError("regime: smaFast < smaSlow and momentumDays must be integers of 1 or more")
-    if cfg["regime"]["minRows"] < max(slow, mom) + 10:
-        raise ValueError("regime.minRows must be at least max(smaSlow, momentumDays) + 10, or the regime is always Unknown")
+    extra = cfg["regime"].get("unknownExtra", UNKNOWN_EXTRA)
+    if not (_int(extra, 0) and _num(cfg["regime"].get("momentumThreshold", 0.0), -1)):
+        raise ValueError("regime.unknownExtra must be an integer of 0 or more and regime.momentumThreshold a number of -1 or more")
+    if cfg["regime"]["minRows"] < max(slow, mom) + extra + 1:
+        raise ValueError("regime.minRows must be at least max(smaSlow, momentumDays) + unknownExtra + 1, or the regime is always Unknown")
     sig = cfg["signals"]
     if not (_int(sig["retryEveryMinutes"], 1) and _int(sig["maxHoldingsSnapshotAgeDays"], 0) and _int(sig["targetsRetentionWeeks"], 1)):
         raise ValueError("signals: retryEveryMinutes >= 1, maxHoldingsSnapshotAgeDays >= 0, targetsRetentionWeeks >= 1 must be integers")

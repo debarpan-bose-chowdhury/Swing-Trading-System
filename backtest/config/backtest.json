@@ -5,7 +5,7 @@
   "fill": {
     "mode": "open",
     "realism": { "bands": false, "volumeCap": false, "circuitLocks": false, "settlementLag": false },
-    "carryOverDays": 7
+    "carryOverDays": null
   },
   "tax": { "schedule": [
     { "from": "2008-04-01", "stcgPct": 0.15, "ltcgPct": 0.0, "ltcgExemptionInr": 0, "cessPct": 0.03 },

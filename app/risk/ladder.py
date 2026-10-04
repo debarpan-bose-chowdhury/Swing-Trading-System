@@ -1,6 +1,6 @@
 """Graded exposure ladder on the time-weighted NAV index: immediate step-down, weekly step-up, flat lock, manual restart."""
 
-from app.risk.common import iso_week
+from app.risk.common import RESTART_RUNG_OFFSET, RUNGS_PER_WEEK, iso_week
 
 
 def new_state(asof: str, twr: float) -> dict:
@@ -22,7 +22,7 @@ def step(state: dict, twr: float, asof: str, cfg: dict, rebalance: bool, regimes
     levels, rr, top = lad["levels"], lad["reRisk"], len(lad["levels"])
     restart = lad["restartFrom"]
     if s["flatLocked"] and restart and restart <= asof and restart != s["lastRestartFrom"] and restart > (s["flatLockedSince"] or ""):
-        s.update(flatLocked=False, flatLockedSince=None, baselineIndex=twr, peakIndex=twr, peakDate=asof, rung=top - 1, lastRestartFrom=restart)
+        s.update(flatLocked=False, flatLockedSince=None, baselineIndex=twr, peakIndex=twr, peakDate=asof, rung=top - lad.get("restartRungOffset", RESTART_RUNG_OFFSET), lastRestartFrom=restart)
     if twr > s["peakIndex"]:
         s["peakIndex"], s["peakDate"] = twr, asof
     drawdown = round((s["peakIndex"] - twr) / s["peakIndex"], 6)  # a 14.999999999999997% value must not fall on the wrong side of 15%
@@ -33,7 +33,7 @@ def step(state: dict, twr: float, asof: str, cfg: dict, rebalance: bool, regimes
                   and len(twr_history) >= window and twr > min(twr_history[-window:]))
     eligible = conditions and s["rung"] > floor and s["rung"] < top and not s["flatLocked"]
     if rebalance and eligible and s["lastReRiskWeek"] != iso_week(asof):
-        s["rung"] -= 1
+        s["rung"] = max(floor, s["rung"] - rr.get("rungsPerWeek", RUNGS_PER_WEEK))
         s["lastReRiskWeek"] = iso_week(asof)
     if s["rung"] == top and not s["flatLocked"]:
         s["flatLocked"], s["flatLockedSince"] = True, asof

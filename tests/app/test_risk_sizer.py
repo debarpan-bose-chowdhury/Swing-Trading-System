@@ -225,6 +225,25 @@ class ResizeTests(Env):
         _, _, topups = sizer.plan_sells(ctx, held, st, cands, tgts, nav)
         return tgts[0], cands, topups
 
+    def test_h7_floor_pct_default_is_the_hidden_2_5_percent(self):
+        self.cfg["sizing"]["noTradeBand"].update(absolutePct=0.01)  # below the floor: today it has no effect
+        _, cands, topups = self.resize(291)  # 2.39% < the 2.5% floor
+        self.assertEqual((dict(cands), topups), ({}, {}))
+        self.cfg["sizing"]["noTradeBand"].update(floorPct=0.025)
+        _, cands, topups = self.resize(291)
+        self.assertEqual((dict(cands), topups), ({}, {}))
+
+    def test_h7_lower_floor_lets_a_narrower_band_act(self):
+        self.cfg["sizing"]["noTradeBand"].update(absolutePct=0.01, floorPct=0.0)  # band = max(0.25 x 8% = 2%, 1%, 0) = 2%
+        _, cands, _ = self.resize(291)  # 2.39% > 2%
+        c, = cands["MID"]
+        self.assertEqual(c["reason"], "REBALANCE_TRIM")
+
+    def test_h7_higher_floor_widens_the_band(self):
+        self.cfg["sizing"]["noTradeBand"].update(floorPct=0.05)
+        _, cands, topups = self.resize(297)  # 2.6% > 2.5% but < 5%
+        self.assertEqual((dict(cands), topups), ({}, {}))
+
     def test_target_weight_is_8_percent(self):
         x, _, _ = self.resize(100)
         self.assertAlmostEqual(x["n"], 56000.0)  # MidCap name cap 8% of 700,000

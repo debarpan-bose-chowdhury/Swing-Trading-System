@@ -1,0 +1,476 @@
+path,file,current,kind,bounds,scale,class,group,affects,parity_test,note
+risk:placeholders,app/config/risk.json,false,bool,,,operational,run-gate,live,,
+risk:capital.cashFlowsFile,app/config/risk.json,"""app/config/cash_flows.csv""",str,,,operational,capital,live,,cash-flow file and reconcile field
+risk:capital.reconcileField,app/config/risk.json,null,null,,,operational,capital,live,,cash-flow file and reconcile field
+risk:sizing.riskPerPositionPct,app/config/risk.json,0.0125,float,0.005..0.025 step 0.0025 (params.json sizing.riskPerPositionPct),linear,tunable,sizing,both,,
+risk:sizing.nameCapPct.LargeCap,app/config/risk.json,0.1,float,0.06..0.15 step 0.01 (params.json sizing.nameCap.LargeCap),linear,tunable,sizing,both,,bounded by the policy maximum of the bucket
+risk:sizing.nameCapPct.MidCap,app/config/risk.json,0.08,float,0.04..0.12 step 0.01 (params.json sizing.nameCap.MidCap),linear,tunable,sizing,both,,bounded by the policy maximum of the bucket
+risk:sizing.nameCapPct.SmallCap,app/config/risk.json,0.06,float,0.03..0.1 step 0.01 (params.json sizing.nameCap.SmallCap),linear,tunable,sizing,both,,bounded by the policy maximum of the bucket
+risk:sizing.minNewOrderInr,app/config/risk.json,25000,int,2000..10000 step 1000 (params.json sizing.minNewOrderInr),log,tunable,sizing,both,,scales with capital: at Rs 1 lakh the live value makes 0 trades
+risk:sizing.minAdjustmentInr,app/config/risk.json,10000,int,1000..5000 step 500 (params.json sizing.minAdjustmentInr),log,tunable,sizing,both,,constraint: not above minNewOrderInr
+risk:sizing.cashBufferPct,app/config/risk.json,0.02,float,0.01..0.05 step 0.01 (params.json sizing.cashBuffer),,risk-limit,sizing,both,,
+risk:sizing.noTradeBand.relative,app/config/risk.json,0.25,float,proposed 0.1..0.5,linear,tunable,sizing,both,,
+risk:sizing.noTradeBand.absolutePct,app/config/risk.json,0.025,float,proposed 0.0..0.05,linear,tunable,sizing,both,,no effect below floorPct (H7)
+risk:sizing.noTradeBand.floorPct,app/config/risk.json,0.025,float,proposed 0.0..0.05,linear,tunable,sizing,both,tests/app/test_risk_sizer.py::ResizeTests::test_h7_*,H7: was the hidden 0.025 in sizer.plan_sells
+risk:sizing.countSaleProceeds,app/config/risk.json,true,bool,,,model-input,sizing,both,,bool: whether same-day sale proceeds fund buys (settlement assumption)
+risk:stops.atrPeriod,app/config/risk.json,20,int,10..30 step 5 (params.json stops.atrPeriod),int,tunable,stops,both,,
+risk:stops.atrMultiplier,app/config/risk.json,3.5,float,2.5..4.5 step 0.5 (params.json stops.atrMultiplier),linear,tunable,stops,both,,
+risk:stops.atrMethod,app/config/risk.json,"""sma""",str,,,structural,stops,both,tests/app/test_risk_common.py::test_dead_stop_keys_must_hold_the_only_implemented_values,validated: only sma is implemented
+risk:stops.priceBasis,app/config/risk.json,"""AdjClose""",str,,,structural,stops,both,tests/app/test_risk_common.py::test_dead_stop_keys_must_hold_the_only_implemented_values,validated: only AdjClose is implemented
+risk:stops.clampPct.LargeCap,app/config/risk.json,"[0.1, 0.18]",list,,linear,tunable,stops,both,,"[lo, hi] per bucket, 0 < lo < hi < 1"
+risk:stops.clampPct.MidCap,app/config/risk.json,"[0.14, 0.22]",list,,linear,tunable,stops,both,,"[lo, hi] per bucket, 0 < lo < hi < 1"
+risk:stops.clampPct.SmallCap,app/config/risk.json,"[0.18, 0.28]",list,,linear,tunable,stops,both,,"[lo, hi] per bucket, 0 < lo < hi < 1"
+risk:stops.bucketFallback,app/config/risk.json,"""SmallCap""",str,,,structural,stops,both,,
+risk:cooldown.stopTradingDays,app/config/risk.json,10,int,5..20 step 5 (params.json cooldown.stopTradingDays),int,tunable,cooldown,both,,
+risk:cooldown.reentryAboveStopClose,app/config/risk.json,true,bool,bool,,tunable,cooldown,both,,bool
+risk:ladder.levels.0.drawdownPct,app/config/risk.json,0.1,float,0.06..0.14 step 0.02 (params.json ladder.drawdown1),,risk-limit,ladder,both,,drawdown rung or invested cap: unfreeze per study with a report warning
+risk:ladder.levels.0.maxInvestedPct,app/config/risk.json,0.75,float,0.65..0.85 step 0.05 (params.json ladder.invested1),,risk-limit,ladder,both,,drawdown rung or invested cap: unfreeze per study with a report warning
+risk:ladder.levels.1.drawdownPct,app/config/risk.json,0.15,float,0.11..0.19 step 0.02 (params.json ladder.drawdown2),,risk-limit,ladder,both,,drawdown rung or invested cap: unfreeze per study with a report warning
+risk:ladder.levels.1.maxInvestedPct,app/config/risk.json,0.5,float,0.4..0.6 step 0.05 (params.json ladder.invested2),,risk-limit,ladder,both,,drawdown rung or invested cap: unfreeze per study with a report warning
+risk:ladder.levels.2.drawdownPct,app/config/risk.json,0.2,float,0.16..0.24 step 0.02 (params.json ladder.drawdown3),,risk-limit,ladder,both,,drawdown rung or invested cap: unfreeze per study with a report warning
+risk:ladder.levels.2.maxInvestedPct,app/config/risk.json,0.25,float,0.15..0.35 step 0.05 (params.json ladder.invested3),,risk-limit,ladder,both,,drawdown rung or invested cap: unfreeze per study with a report warning
+risk:ladder.levels.3.drawdownPct,app/config/risk.json,0.25,float,0.21..0.29 step 0.02 (params.json ladder.drawdown4),,risk-limit,ladder,both,,drawdown rung or invested cap: unfreeze per study with a report warning
+risk:ladder.levels.3.maxInvestedPct,app/config/risk.json,0.0,float,,,risk-limit,ladder,both,,drawdown rung or invested cap: unfreeze per study with a report warning
+risk:ladder.reRisk.regimes,app/config/risk.json,"[""BULL"", ""TREND""]",list,,,structural,ladder,both,,
+risk:ladder.reRisk.consecutiveWeeks,app/config/risk.json,2,int,proposed 1..4,int,tunable,ladder,both,,
+risk:ladder.reRisk.navAboveMinOfPreviousDays,app/config/risk.json,20,int,proposed 10..40,int,tunable,ladder,both,,
+risk:ladder.reRisk.rungsPerWeek,app/config/risk.json,1,int,proposed 1..2,int,tunable,ladder,both,tests/app/test_risk_ladder.py::ExposedLadderNumbers,H8: was one rung per week
+risk:ladder.restartFrom,app/config/risk.json,null,null,,,operational,ladder,live,,the owner's manual restart date
+risk:ladder.restartRungOffset,app/config/risk.json,1,int,proposed 1..2,int,tunable,ladder,both,tests/app/test_risk_ladder.py::ExposedLadderNumbers,H8: a restart resumes top - offset
+risk:exposure.regimeCap.BULL,app/config/risk.json,1.0,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
+risk:exposure.regimeCap.TREND,app/config/risk.json,1.0,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
+risk:exposure.regimeCap.WEAK,app/config/risk.json,1.0,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
+risk:exposure.regimeCap.BEAR,app/config/risk.json,1.0,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
+risk:exposure.regimeCap.Unknown,app/config/risk.json,1.0,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
+risk:heat.capPct,app/config/risk.json,0.12,float,0.06..0.2 step 0.02 (params.json sizing.heatCap),,risk-limit,sizing,both,,
+risk:liquidity.advDays,app/config/risk.json,20,int,proposed 10..60,int,tunable,liquidity,both,,
+risk:liquidity.maxParticipationPct.LargeCap,app/config/risk.json,0.01,float,proposed 0.002..0.02,log,tunable,liquidity,both,,
+risk:liquidity.maxParticipationPct.MidCap,app/config/risk.json,0.01,float,proposed 0.002..0.02,log,tunable,liquidity,both,,
+risk:liquidity.maxParticipationPct.SmallCap,app/config/risk.json,0.005,float,proposed 0.002..0.02,log,tunable,liquidity,both,,
+risk:surveillance.sources.asm.url,app/config/risk.json,"""https://www.nseindia.com/api/reportASM?csv=true""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.asm.format,app/config/risk.json,"""csv""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.asm.symbolColumn,app/config/risk.json,"""SYMBOL""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.asm.valueColumn,app/config/risk.json,"""ASM STAGE""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.gsm.url,app/config/risk.json,"""https://www.nseindia.com/api/reportGSM?csv=true""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.gsm.format,app/config/risk.json,"""csv""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.gsm.symbolColumn,app/config/risk.json,"""SYMBOL""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.gsm.valueColumn,app/config/risk.json,"""GSM STAGE""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.t2t.url,app/config/risk.json,"""https://nsearchives.nseindia.com/content/equities/series_change.csv""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.t2t.format,app/config/risk.json,"""csv""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.t2t.symbolColumn,app/config/risk.json,"""Symbol""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.t2t.filterColumn,app/config/risk.json,"""To Series""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.t2t.filterValues,app/config/risk.json,"[""BE"", ""BZ""]",list,,,regulatory,surveillance,live,,
+risk:surveillance.sources.bands.url,app/config/risk.json,"""https://nsearchives.nseindia.com/content/equities/sec_list.csv""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.bands.format,app/config/risk.json,"""csv""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.bands.symbolColumn,app/config/risk.json,"""Symbol""",str,,,regulatory,surveillance,live,,
+risk:surveillance.sources.bands.valueColumn,app/config/risk.json,"""Band""",str,,,regulatory,surveillance,live,,
+risk:surveillance.blockEntryBandPct,app/config/risk.json,5,int,,,regulatory,surveillance,live,,
+risk:surveillance.staleExitDays,app/config/risk.json,3,int,,,regulatory,surveillance,live,,
+risk:surveillance.exitOn,app/config/risk.json,"[""GSM"", ""T2T""]",list,,,regulatory,surveillance,live,,
+risk:surveillance.maxRetries,app/config/risk.json,3,int,,,operational,surveillance,live,,
+risk:surveillance.backoffSeconds,app/config/risk.json,"[2, 4, 8]",list,,,operational,surveillance,live,,
+risk:surveillance.runTime,app/config/risk.json,"""20:15""",str,,,operational,surveillance,live,,
+risk:surveillance.retryUntil,app/config/risk.json,"""22:15""",str,,,operational,surveillance,live,,
+risk:tax.deferral.enabled,app/config/risk.json,true,bool,,,regulatory,tax,both,,the 12-month rule's mechanics
+risk:tax.deferral.windowDays,app/config/risk.json,28,int,proposed 14..56,int,tunable,tax,both,,
+risk:tax.deferral.minGainPct,app/config/risk.json,0.1,float,proposed 0.05..0.25,linear,tunable,tax,both,,
+risk:tax.deferral.requireAboveTrend,app/config/risk.json,true,bool,,,regulatory,tax,both,,the 12-month rule's mechanics
+risk:tax.rates.asOf,app/config/risk.json,"""2026-10-02""",str,,,regulatory,tax,live,,
+risk:tax.rates.stcgPct,app/config/risk.json,0.2,float,,,regulatory,tax,live,,
+risk:tax.rates.ltcgPct,app/config/risk.json,0.125,float,,,regulatory,tax,live,,
+risk:tax.rates.ltcgExemptionInr,app/config/risk.json,125000,int,,,regulatory,tax,live,,
+risk:tax.rates.cessPct,app/config/risk.json,0.04,float,,,regulatory,tax,live,,
+risk:gate.maxMissingShare,app/config/risk.json,0.1,float,,,operational,run-gate,live,,
+risk:gate.maxLedgerLagTradingDays,app/config/risk.json,0,int,,,operational,run-gate,live,,
+risk:gate.targetsWaitUntil,app/config/risk.json,"""Sun 22:00""",str,,,operational,run-gate,live,,
+risk:gate.retryUntil,app/config/risk.json,"""08:00""",str,,,operational,run-gate,live,,
+risk:shadow.enabled,app/config/risk.json,true,bool,,,operational,shadow,live,,
+risk:shadow.carryOverDays,app/config/risk.json,7,int,,,model-input,fill,both,tests/app/test_risk_shadow.py::CarryOverDays,H9: backtest fill.carryOverDays inherits it when null
+risk:evaluator.benchmark,app/config/risk.json,"""^NSEI""",str,,,operational,metrics,live,,
+risk:evaluator.riskFreeRatePct,app/config/risk.json,0.055,float,,,design,metrics,both,,
+risk:evaluator.riskFreeAsOf,app/config/risk.json,"""2026-09-30""",str,,,operational,metrics,live,,
+risk:evaluator.tradingDaysPerYear,app/config/risk.json,252,int,,,design,metrics,both,tests/app/test_risk_evaluator.py::TradingDaysPerYear,H11: annualisation only; the trailing252 window keeps its length
+risk:evaluator.minObs,app/config/risk.json,60,int,,,operational,metrics,live,,
+risk:evaluator.statsDay,app/config/risk.json,"""Fri""",str,,,operational,metrics,live,,
+risk:evaluator.bearRegime,app/config/risk.json,"""BEAR""",str,,,operational,metrics,live,,
+risk:signals.runTime,app/config/risk.json,"""21:45""",str,,,operational,schedule,live,,
+risk:signals.retentionWeeks,app/config/risk.json,104,int,,,operational,schedule,live,,
+risk:paths.risk,app/config/risk.json,"""app/data/risk""",str,,,operational,paths,live,,
+risk:paths.market,app/config/risk.json,"""app/data/market""",str,,,operational,paths,live,,
+risk:paths.analyst,app/config/risk.json,"""app/data/analyst""",str,,,operational,paths,live,,
+risk:paths.upstreamStorage,app/config/risk.json,"""app/data/storage""",str,,,operational,paths,live,,
+risk:paths.metadataConfig,app/config/risk.json,"""app/config/config.json""",str,,,operational,paths,live,,
+risk:paths.analystConfig,app/config/risk.json,"""app/config/analyst.json""",str,,,operational,paths,live,,
+risk:paths.calendar,app/config/risk.json,"""app/config/nse_calendar.json""",str,,,operational,paths,live,,
+risk:paths.indices,app/config/risk.json,"""app/config/indices.json""",str,,,operational,paths,live,,
+risk:paths.logs,app/config/risk.json,"""app/data/logs""",str,,,operational,paths,live,,
+risk:lock.staleAfterHours,app/config/risk.json,6,int,,,operational,lock,live,,
+risk:mail.smtpHost,app/config/risk.json,"""<set at deployment>""",str,,,operational,mail,live,,
+risk:mail.smtpPort,app/config/risk.json,587,int,,,operational,mail,live,,
+risk:mail.sender,app/config/risk.json,"""<set at deployment>""",str,,,operational,mail,live,,
+risk:mail.recipients,app/config/risk.json,"[""<set at deployment>""]",list,,,operational,mail,live,,
+analyst:placeholders,app/config/analyst.json,false,bool,,,operational,run-gate,live,,
+analyst:broker.name,app/config/analyst.json,"""AngelOne""",str,,,operational,broker,live,,
+analyst:broker.timeoutSeconds,app/config/analyst.json,15,int,,,operational,broker,live,,
+analyst:broker.minCallGapSeconds,app/config/analyst.json,1.0,float,,,operational,broker,live,,
+analyst:broker.maxRetries,app/config/analyst.json,3,int,,,operational,broker,live,,
+analyst:broker.backoffSeconds,app/config/analyst.json,"[2, 4, 8]",list,,,operational,broker,live,,
+analyst:broker.loginAttempts,app/config/analyst.json,3,int,,,operational,broker,live,,
+analyst:broker.loginRetryGapSeconds,app/config/analyst.json,60,int,,,operational,broker,live,,
+analyst:broker.clientLocalIp,app/config/analyst.json,"""127.0.0.1""",str,,,operational,broker,live,,
+analyst:broker.clientPublicIp,app/config/analyst.json,"""127.0.0.1""",str,,,operational,broker,live,,
+analyst:broker.clientMacAddress,app/config/analyst.json,"""00:00:00:00:00:00""",str,,,operational,broker,live,,
+analyst:capital.floatingCapitalInr,app/config/analyst.json,100000,int,,,design,capital,both,,
+analyst:capital.ignoreSymbols,app/config/analyst.json,[],list,,,operational,capital,live,,
+analyst:limits.maxPositionDrawdownPct,app/config/analyst.json,0.17,float,,,risk-limit,limits,live,,live-monitoring limits
+analyst:limits.maxPortfolioDrawdownPct,app/config/analyst.json,0.5,float,,,risk-limit,limits,live,,live-monitoring limits
+analyst:composition.LargeCap,app/config/analyst.json,0.5,float,simplex over the buckets,simplex,tunable,composition,both,,a weight of 0 disables a bucket; must sum to 1
+analyst:composition.MidCap,app/config/analyst.json,0.3,float,simplex over the buckets,simplex,tunable,composition,both,,a weight of 0 disables a bucket; must sum to 1
+analyst:composition.SmallCap,app/config/analyst.json,0.2,float,simplex over the buckets,simplex,tunable,composition,both,,a weight of 0 disables a bucket; must sum to 1
+analyst:rebalance.schedule,app/config/analyst.json,"""weekly""",str,,,structural,rebalance,both,,
+analyst:rebalance.execution,app/config/analyst.json,"""monday_open""",str,,,structural,rebalance,both,,
+analyst:regime.index,app/config/analyst.json,"""^NSEI""",str,,,structural,regime,both,,
+analyst:regime.persistenceWeeks,app/config/analyst.json,4,int,2..6 step 1 (params.json regime.persistenceWeeks),int,tunable,regime,both,,"regime stage, narrow bounds"
+analyst:regime.minRows,app/config/analyst.json,210,int,,,structural,regime,both,,"must be >= max(smaSlow, momentumDays) + unknownExtra + 1"
+analyst:regime.smaFast,app/config/analyst.json,50,int,30..70 step 10 (params.json regime.smaFast),int,tunable,regime,both,,"regime stage, narrow bounds"
+analyst:regime.smaSlow,app/config/analyst.json,200,int,150..250 step 25 (params.json regime.smaSlow),int,tunable,regime,both,,"regime stage, narrow bounds"
+analyst:regime.momentumDays,app/config/analyst.json,63,int,42..84 step 21 (params.json regime.momentumDays),int,tunable,regime,both,,"regime stage, narrow bounds"
+analyst:regime.momentumThreshold,app/config/analyst.json,0.0,float,proposed -0.05..0.05,linear,tunable,regime,both,tests/app/test_analyst_regime.py::ExposedRegimeNumbers,H5
+analyst:regime.unknownExtra,app/config/analyst.json,9,int,proposed 0..20,int,tunable,regime,both,tests/app/test_analyst_regime.py::ExposedRegimeNumbers,H6: warm-up length
+analyst:strategies.BULL.LargeCap.top_n,app/config/analyst.json,2,int,1..4 step 1 (params.json selector.topN.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.LargeCap.lookback,app/config/analyst.json,126,int,63..189 step 21 (params.json selector.lookback.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.LargeCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.MidCap.top_n,app/config/analyst.json,2,int,1..4 step 1 (params.json selector.topN.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.MidCap.lookback,app/config/analyst.json,126,int,63..189 step 21 (params.json selector.lookback.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.MidCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.SmallCap.top_n,app/config/analyst.json,2,int,1..4 step 1 (params.json selector.topN.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.SmallCap.lookback,app/config/analyst.json,126,int,63..189 step 21 (params.json selector.lookback.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.SmallCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.LargeCap.top_n,app/config/analyst.json,4,int,2..6 step 1 (params.json selector.topN.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.LargeCap.lookback,app/config/analyst.json,168,int,126..210 step 21 (params.json selector.lookback.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.LargeCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.MidCap.top_n,app/config/analyst.json,4,int,2..6 step 1 (params.json selector.topN.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.MidCap.lookback,app/config/analyst.json,168,int,126..210 step 21 (params.json selector.lookback.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.MidCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.SmallCap.top_n,app/config/analyst.json,4,int,2..6 step 1 (params.json selector.topN.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.SmallCap.lookback,app/config/analyst.json,168,int,126..210 step 21 (params.json selector.lookback.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.SmallCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.LargeCap.top_n,app/config/analyst.json,6,int,3..9 step 1 (params.json selector.topN.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.LargeCap.lookback,app/config/analyst.json,84,int,42..126 step 21 (params.json selector.lookback.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.LargeCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.MidCap.top_n,app/config/analyst.json,6,int,3..9 step 1 (params.json selector.topN.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.MidCap.lookback,app/config/analyst.json,84,int,42..126 step 21 (params.json selector.lookback.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.MidCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.SmallCap.top_n,app/config/analyst.json,6,int,3..9 step 1 (params.json selector.topN.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.SmallCap.lookback,app/config/analyst.json,84,int,42..126 step 21 (params.json selector.lookback.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.SmallCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.LargeCap.top_n,app/config/analyst.json,8,int,4..12 step 1 (params.json selector.topN.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.LargeCap.lookback,app/config/analyst.json,63,int,42..84 step 21 (params.json selector.lookback.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.LargeCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.MidCap.top_n,app/config/analyst.json,8,int,4..12 step 1 (params.json selector.topN.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.MidCap.lookback,app/config/analyst.json,63,int,42..84 step 21 (params.json selector.lookback.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.MidCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.SmallCap.top_n,app/config/analyst.json,8,int,4..12 step 1 (params.json selector.topN.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.SmallCap.lookback,app/config/analyst.json,63,int,42..84 step 21 (params.json selector.lookback.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.SmallCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:selector.maxStaleTradingDays,app/config/analyst.json,0,int,,,operational,gates,live,,
+analyst:selector.maxBucketFileAgeDays,app/config/analyst.json,7,int,,,operational,gates,live,,
+analyst:selector.maxMissingShare,app/config/analyst.json,0.1,float,,,operational,gates,live,,
+analyst:selector.momentumSkipDays,app/config/analyst.json,0,int,proposed 0..21,int,tunable,selector,both,,
+analyst:selector.minMomentum,app/config/analyst.json,0.0,float,proposed 0.0..0.1,linear,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,"H2: candidate filter, all regimes"
+analyst:selector.trendBuffer,app/config/analyst.json,0.0,float,proposed 0.0..0.05,linear,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H3: price > trend x (1 + buffer)
+analyst:selector.liquidity.windowDays,app/config/analyst.json,20,int,,int,tunable,selector,both,,
+analyst:selector.liquidity.minAdvCr,app/config/analyst.json,10,int,5..20 step 5 (params.json selector.minAdvCr),int,tunable,selector,both,,
+analyst:selector.liquidity.statistic,app/config/analyst.json,"""median""",str,,,structural,selector,both,,
+analyst:selector.bearScore.mom20,app/config/analyst.json,0.4,float,0.2..0.6 step 0.1 (params.json selector.bear.mom20),linear,tunable,selector,both,,score weight
+analyst:selector.bearScore.mom63,app/config/analyst.json,0.35,float,0.15..0.55 step 0.1 (params.json selector.bear.mom63),linear,tunable,selector,both,,score weight
+analyst:selector.bearScore.hit20,app/config/analyst.json,0.2,float,0.0..0.4 step 0.1 (params.json selector.bear.hit20),linear,tunable,selector,both,,score weight
+analyst:selector.bearScore.vol20,app/config/analyst.json,-0.35,float,-0.55..-0.15 step 0.1 (params.json selector.bear.vol20),linear,tunable,selector,both,,score weight
+analyst:selector.bearScore.dd63,app/config/analyst.json,0.1,float,0.0..0.3 step 0.1 (params.json selector.bear.dd63),linear,tunable,selector,both,,score weight
+analyst:selector.bearScore.windows.shortDays,app/config/analyst.json,20,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
+analyst:selector.bearScore.windows.longDays,app/config/analyst.json,63,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
+analyst:selector.bearScore.windows.hitDays,app/config/analyst.json,20,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
+analyst:selector.bearScore.windows.volDays,app/config/analyst.json,20,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
+analyst:selector.bearScore.windows.ddDays,app/config/analyst.json,63,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
+analyst:selector.bearScore.confirmThreshold,app/config/analyst.json,0.0,float,proposed 0.0..0.05,linear,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H4: BEAR tier confirmation
+analyst:ledger.runTime,app/config/analyst.json,"""16:30""",str,,,operational,ledger,live,,
+analyst:ledger.retryEveryMinutes,app/config/analyst.json,60,int,,,operational,ledger,live,,
+analyst:ledger.retryUntil,app/config/analyst.json,"""20:30""",str,,,operational,ledger,live,,
+analyst:ledger.snapshotRetentionDays,app/config/analyst.json,90,int,,,operational,ledger,live,,
+analyst:ledger.backupRetentionDays,app/config/analyst.json,30,int,,,operational,ledger,live,,
+analyst:ledger.corpActionCostTolerance,app/config/analyst.json,0.01,float,,,operational,ledger,live,,
+analyst:ledger.observedQtyFields,app/config/analyst.json,"[""quantity""]",list,,,operational,ledger,live,,
+analyst:signals.runTime,app/config/analyst.json,"""21:30""",str,,,operational,schedule,live,,
+analyst:signals.retryEveryMinutes,app/config/analyst.json,60,int,,,operational,schedule,live,,
+analyst:signals.retryUntil,app/config/analyst.json,"""Sun 22:00""",str,,,operational,schedule,live,,
+analyst:signals.maxHoldingsSnapshotAgeDays,app/config/analyst.json,3,int,,,operational,schedule,live,,
+analyst:signals.targetsRetentionWeeks,app/config/analyst.json,104,int,,,operational,schedule,live,,
+analyst:costs.asOf,app/config/analyst.json,"""2026-09-30""",str,,,operational,costs,live,,
+analyst:costs.brokerage.flatInr,app/config/analyst.json,20,int,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.brokerage.pct,app/config/analyst.json,0.001,float,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.brokerage.minInr,app/config/analyst.json,5,int,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.sttPct,app/config/analyst.json,0.001,float,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.nseTxnPct,app/config/analyst.json,3.0699e-05,float,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.ipftPct,app/config/analyst.json,1e-09,float,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.sebiPct,app/config/analyst.json,1e-06,float,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.stampBuyPct,app/config/analyst.json,0.00015,float,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.gstPct,app/config/analyst.json,0.18,float,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.dpSellInr,app/config/analyst.json,20,int,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.dpGstPct,app/config/analyst.json,0.18,float,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.slippageBpsPerSide.LargeCap,app/config/analyst.json,10,int,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.slippageBpsPerSide.MidCap,app/config/analyst.json,25,int,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.slippageBpsPerSide.SmallCap,app/config/analyst.json,50,int,,,model-input,costs,both,,frozen; used for stress only
+analyst:costs.minTradeNotionalInr,app/config/analyst.json,20000,int,,,model-input,costs,both,,frozen; used for stress only
+analyst:paths.analyst,app/config/analyst.json,"""app/data/analyst""",str,,,operational,paths,live,,
+analyst:paths.market,app/config/analyst.json,"""app/data/market""",str,,,operational,paths,live,,
+analyst:paths.upstreamStorage,app/config/analyst.json,"""app/data/storage""",str,,,operational,paths,live,,
+analyst:paths.metadataConfig,app/config/analyst.json,"""app/config/config.json""",str,,,operational,paths,live,,
+analyst:paths.calendar,app/config/analyst.json,"""app/config/nse_calendar.json""",str,,,operational,paths,live,,
+analyst:paths.seed,app/config/analyst.json,"""app/config/seed_positions.csv""",str,,,operational,paths,live,,
+analyst:paths.logs,app/config/analyst.json,"""app/data/logs""",str,,,operational,paths,live,,
+analyst:lock.staleAfterHours,app/config/analyst.json,6,int,,,operational,lock,live,,
+analyst:mail.smtpHost,app/config/analyst.json,"""<set at deployment>""",str,,,operational,mail,live,,
+analyst:mail.smtpPort,app/config/analyst.json,587,int,,,operational,mail,live,,
+analyst:mail.sender,app/config/analyst.json,"""<set at deployment>""",str,,,operational,mail,live,,
+analyst:mail.recipients,app/config/analyst.json,"[""<set at deployment>""]",list,,,operational,mail,live,,
+backtest:window.start,backtest/config/backtest.json,null,null,,,design,window,backtest,,
+backtest:window.end,backtest/config/backtest.json,null,null,,,design,window,backtest,,
+backtest:window.holdoutYears,backtest/config/backtest.json,2,int,,,design,window,backtest,,
+backtest:broker.profile,backtest/config/backtest.json,"""angelone""",str,,,design,broker,backtest,,
+backtest:broker.chargesFrom,backtest/config/backtest.json,"""app/config/analyst.json""",str,,,design,broker,backtest,,
+backtest:capital.inr,backtest/config/backtest.json,100000,int,,,design,capital,backtest,,
+backtest:capital.composition.LargeCap,backtest/config/backtest.json,0.5,float,,,design,capital,backtest,,
+backtest:capital.composition.MidCap,backtest/config/backtest.json,0.3,float,,,design,capital,backtest,,
+backtest:capital.composition.SmallCap,backtest/config/backtest.json,0.2,float,,,design,capital,backtest,,
+backtest:fill.mode,backtest/config/backtest.json,"""open""",str,,,model-input,fill,backtest,,
+backtest:fill.realism.bands,backtest/config/backtest.json,false,bool,,,model-input,fill,backtest,,
+backtest:fill.realism.volumeCap,backtest/config/backtest.json,false,bool,,,model-input,fill,backtest,,
+backtest:fill.realism.circuitLocks,backtest/config/backtest.json,false,bool,,,model-input,fill,backtest,,
+backtest:fill.realism.settlementLag,backtest/config/backtest.json,false,bool,,,model-input,fill,backtest,,
+backtest:fill.carryOverDays,backtest/config/backtest.json,null,null,,,model-input,fill,backtest,tests/backtest/test_param_exposure.py::CarryOver,H9: null reads risk.json shadow.carryOverDays
+backtest:tax.schedule.0.from,backtest/config/backtest.json,"""2008-04-01""",str,,,regulatory,tax,backtest,,
+backtest:tax.schedule.0.stcgPct,backtest/config/backtest.json,0.15,float,,,regulatory,tax,backtest,,
+backtest:tax.schedule.0.ltcgPct,backtest/config/backtest.json,0.0,float,,,regulatory,tax,backtest,,
+backtest:tax.schedule.0.ltcgExemptionInr,backtest/config/backtest.json,0,int,,,regulatory,tax,backtest,,
+backtest:tax.schedule.0.cessPct,backtest/config/backtest.json,0.03,float,,,regulatory,tax,backtest,,
+backtest:tax.schedule.1.from,backtest/config/backtest.json,"""2018-04-01""",str,,,regulatory,tax,backtest,,
+backtest:tax.schedule.1.stcgPct,backtest/config/backtest.json,0.15,float,,,regulatory,tax,backtest,,
+backtest:tax.schedule.1.ltcgPct,backtest/config/backtest.json,0.1,float,,,regulatory,tax,backtest,,
+backtest:tax.schedule.1.ltcgExemptionInr,backtest/config/backtest.json,100000,int,,,regulatory,tax,backtest,,
+backtest:tax.schedule.1.cessPct,backtest/config/backtest.json,0.04,float,,,regulatory,tax,backtest,,
+backtest:tax.schedule.2.from,backtest/config/backtest.json,"""2024-07-23""",str,,,regulatory,tax,backtest,,
+backtest:tax.schedule.2.stcgPct,backtest/config/backtest.json,0.2,float,,,regulatory,tax,backtest,,
+backtest:tax.schedule.2.ltcgPct,backtest/config/backtest.json,0.125,float,,,regulatory,tax,backtest,,
+backtest:tax.schedule.2.ltcgExemptionInr,backtest/config/backtest.json,125000,int,,,regulatory,tax,backtest,,
+backtest:tax.schedule.2.cessPct,backtest/config/backtest.json,0.04,float,,,regulatory,tax,backtest,,
+backtest:tax.confirmed,backtest/config/backtest.json,true,bool,,,operational,tax,backtest,,
+backtest:ladder.autoRestart.enabled,backtest/config/backtest.json,true,bool,,,model-input,ladder,backtest,,simulates the owner's manual restart
+backtest:ladder.autoRestart.afterSessions,backtest/config/backtest.json,126,int,,,model-input,ladder,backtest,,simulates the owner's manual restart
+backtest:walkforward.type,backtest/config/backtest.json,"""rolling""",str,,,design,walkforward,backtest,,
+backtest:walkforward.trainYears,backtest/config/backtest.json,5,int,,,design,walkforward,backtest,,
+backtest:walkforward.testYears,backtest/config/backtest.json,1,int,,,design,walkforward,backtest,,
+backtest:walkforward.stepYears,backtest/config/backtest.json,1,int,,,design,walkforward,backtest,,
+backtest:walkforward.purgeDays,backtest/config/backtest.json,168,int,,,design,walkforward,backtest,tests/backtest/test_param_exposure.py::PurgeFloor,H10: floor is config.MIN_PURGE_DAYS; the effective purge is also lifted to the longest look-back
+backtest:gate.pboMax,backtest/config/backtest.json,0.2,float,,,design,gate,backtest,,
+backtest:gate.dsrMin,backtest/config/backtest.json,0.95,float,,,design,gate,backtest,,
+backtest:gate.oosIsMin,backtest/config/backtest.json,0.6,float,,,design,gate,backtest,,
+backtest:gate.neighbourhoodShare,backtest/config/backtest.json,0.8,float,,,design,gate,backtest,,
+backtest:gate.neighbourhoodTolerance,backtest/config/backtest.json,0.2,float,,,design,gate,backtest,,
+backtest:stress.2008 crisis,backtest/config/backtest.json,"[[""2008-09-01"", ""2009-03-31""]]",list,,,design,stress,backtest,,
+backtest:stress.2013 taper and 2015-16,backtest/config/backtest.json,"[[""2013-05-22"", ""2013-09-30""], [""2015-08-01"", ""2016-02-29""]]",list,,,design,stress,backtest,,
+backtest:stress.2020 COVID,backtest/config/backtest.json,"[[""2020-02-01"", ""2020-12-31""]]",list,,,design,stress,backtest,,
+backtest:stress.2022 hikes and 2024 election,backtest/config/backtest.json,"[[""2022-01-01"", ""2022-12-31""], [""2024-06-03"", ""2024-06-10""]]",list,,,design,stress,backtest,,
+backtest:surv.proxy,backtest/config/backtest.json,false,bool,,,model-input,surveillance,backtest,,
+backtest:surv.circuit.movePct,backtest/config/backtest.json,null,null,,,model-input,surveillance,backtest,,
+backtest:surv.circuit.rangePct,backtest/config/backtest.json,null,null,,,model-input,surveillance,backtest,,
+backtest:surv.circuit.window,backtest/config/backtest.json,null,null,,,model-input,surveillance,backtest,,
+backtest:surv.circuit.minHits,backtest/config/backtest.json,null,null,,,model-input,surveillance,backtest,,
+backtest:surv.thin.window,backtest/config/backtest.json,null,null,,,model-input,surveillance,backtest,,
+backtest:surv.thin.minValueInr,backtest/config/backtest.json,null,null,,,model-input,surveillance,backtest,,
+backtest:prep.dividendsFrom,backtest/config/backtest.json,"""2007-01-01""",str,,,design,prep,backtest,,
+backtest:prep.bigMovePct,backtest/config/backtest.json,0.25,float,,,design,prep,backtest,,
+backtest:prep.dividendStepMin,backtest/config/backtest.json,0.002,float,,,design,prep,backtest,,
+backtest:prep.dividendTolerance,backtest/config/backtest.json,0.05,float,,,design,prep,backtest,,
+backtest:bhav.note,backtest/config/backtest.json,"""URL templates and column names are from the TDD and memory, UNVERIFIED. `python -m backtest.bhav --probe` downloads one file of each format on your PC and checks them; --download refuses until both probes pass.""",str,,,operational,bhav,backtest,,
+backtest:bhav.from,backtest/config/backtest.json,"""2007-09-17""",str,,,operational,bhav,backtest,,
+backtest:bhav.seriesKeep,backtest/config/backtest.json,"[""EQ"", ""BE"", ""BZ""]",list,,,operational,bhav,backtest,,
+backtest:bhav.probeDays.legacy,backtest/config/backtest.json,"[""2007-09-17"", ""2008-01-02"", ""2015-06-02"", ""2024-07-05""]",list,,,operational,bhav,backtest,,
+backtest:bhav.probeDays.udiff,backtest/config/backtest.json,"[""2024-07-09"", ""2026-09-30""]",list,,,operational,bhav,backtest,,
+backtest:bhav.client.homeUrl,backtest/config/backtest.json,"""https://www.nseindia.com""",str,,,operational,bhav,backtest,,
+backtest:bhav.client.maxRetries,backtest/config/backtest.json,3,int,,,operational,bhav,backtest,,
+backtest:bhav.client.backoffSeconds,backtest/config/backtest.json,"[2, 4, 8]",list,,,operational,bhav,backtest,,
+backtest:bhav.client.gapSeconds,backtest/config/backtest.json,1.0,float,,,operational,bhav,backtest,,
+backtest:bhav.client.abortAfterFailures,backtest/config/backtest.json,10,int,,,operational,bhav,backtest,,
+backtest:bhav.crosscheck.closeTolerance,backtest/config/backtest.json,0.005,float,,,operational,bhav,backtest,,
+backtest:bhav.crosscheck.volumeTolerance,backtest/config/backtest.json,0.1,float,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.until,backtest/config/backtest.json,"""2024-07-05""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.url,backtest/config/backtest.json,"""https://nsearchives.nseindia.com/content/historical/EQUITIES/{yyyy}/{MON}/cm{dd}{MON}{yyyy}bhav.csv.zip""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.dateColumn,backtest/config/backtest.json,"""TIMESTAMP""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.dateFormat,backtest/config/backtest.json,"""%d-%b-%Y""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.columns.symbol,backtest/config/backtest.json,"""SYMBOL""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.columns.series,backtest/config/backtest.json,"""SERIES""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.columns.open,backtest/config/backtest.json,"""OPEN""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.columns.high,backtest/config/backtest.json,"""HIGH""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.columns.low,backtest/config/backtest.json,"""LOW""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.columns.close,backtest/config/backtest.json,"""CLOSE""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.columns.prevClose,backtest/config/backtest.json,"""PREVCLOSE""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.columns.volume,backtest/config/backtest.json,"""TOTTRDQTY""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.columns.value,backtest/config/backtest.json,"""TOTTRDVAL""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.legacy.columns.isin,backtest/config/backtest.json,"""ISIN""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.from,backtest/config/backtest.json,"""2024-07-08""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.url,backtest/config/backtest.json,"""https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_{yyyymmdd}_F_0000.csv.zip""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.dateColumn,backtest/config/backtest.json,"""TradDt""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.dateFormat,backtest/config/backtest.json,"""%Y-%m-%d""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.columns.symbol,backtest/config/backtest.json,"""TckrSymb""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.columns.series,backtest/config/backtest.json,"""SctySrs""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.columns.open,backtest/config/backtest.json,"""OpnPric""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.columns.high,backtest/config/backtest.json,"""HghPric""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.columns.low,backtest/config/backtest.json,"""LwPric""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.columns.close,backtest/config/backtest.json,"""ClsPric""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.columns.prevClose,backtest/config/backtest.json,"""PrvsClsgPric""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.columns.volume,backtest/config/backtest.json,"""TtlTradgVol""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.columns.value,backtest/config/backtest.json,"""TtlTrfVal""",str,,,operational,bhav,backtest,,
+backtest:bhav.formats.udiff.columns.isin,backtest/config/backtest.json,"""ISIN""",str,,,operational,bhav,backtest,,
+backtest:universe.mode,backtest/config/backtest.json,"""today""",str,,,design,universe,backtest,,
+backtest:universe.adjustValidated,backtest/config/backtest.json,true,bool,,,design,universe,backtest,,
+backtest:universe.rankWindow,backtest/config/backtest.json,120,int,,,design,universe,backtest,,
+backtest:universe.rankMinObs,backtest/config/backtest.json,60,int,,,design,universe,backtest,,
+backtest:universe.scopeTop,backtest/config/backtest.json,250,int,,,design,universe,backtest,,
+backtest:universe.symbolMap,backtest/config/backtest.json,"""backtest/config/symbol_map.csv""",str,,,design,universe,backtest,,
+backtest:universe.excludePattern,backtest/config/backtest.json,"""-RE\\d*$""",str,,,design,universe,backtest,,
+backtest:universe.symbolChange.url,backtest/config/backtest.json,"""https://nsearchives.nseindia.com/content/equities/symbolchange.csv""",str,,,design,universe,backtest,,
+backtest:universe.symbolChange.layout.fromEnd.old,backtest/config/backtest.json,3,int,,,design,universe,backtest,,
+backtest:universe.symbolChange.layout.fromEnd.new,backtest/config/backtest.json,2,int,,,design,universe,backtest,,
+backtest:universe.symbolChange.layout.fromEnd.date,backtest/config/backtest.json,1,int,,,design,universe,backtest,,
+backtest:universe.symbolChange.layout.dateFormat,backtest/config/backtest.json,"""%d-%b-%Y""",str,,,design,universe,backtest,,
+backtest:universe.adjust.minMove,backtest/config/backtest.json,0.3,float,,,design,universe,backtest,,
+backtest:universe.adjust.niceTolerance,backtest/config/backtest.json,0.1,float,,,design,universe,backtest,,
+backtest:universe.adjust.volumeWindow,backtest/config/backtest.json,10,int,,,design,universe,backtest,,
+backtest:universe.adjust.volumeTolerance,backtest/config/backtest.json,0.8,float,,,design,universe,backtest,,
+backtest:universe.adjust.minPost,backtest/config/backtest.json,5,int,,,design,universe,backtest,,
+backtest:universe.adjust.tightTolerance,backtest/config/backtest.json,0.1,float,,,design,universe,backtest,,
+backtest:universe.adjust.crashSpike,backtest/config/backtest.json,4.0,float,,,design,universe,backtest,,
+backtest:universe.vanishHaircuts,backtest/config/backtest.json,"[0.5, 1.0]",list,,,design,universe,backtest,,
+backtest:compute.workers,backtest/config/backtest.json,8,int,,,design,compute,backtest,,
+backtest:compute.seed,backtest/config/backtest.json,1,int,,,design,compute,backtest,,
+backtest:paths.data,backtest/config/backtest.json,"""backtest/data""",str,,,operational,paths,backtest,,
+backtest:paths.appConfig,backtest/config/backtest.json,"""app/config""",str,,,operational,paths,backtest,,
+backtest:paths.appData,backtest/config/backtest.json,"""app/data""",str,,,operational,paths,backtest,,
+backtest:paths.params,backtest/config/backtest.json,"""backtest/config/params.json""",str,,,operational,paths,backtest,,
+config:filter.minInceptionDays,app/config/config.json,365,int,,,structural,metadata,both,,"2T / 500B / 100B market caps, topN, minInceptionDays"
+config:filter.capBuckets.0.name,app/config/config.json,"""LargeCap""",str,,,structural,metadata,both,,"2T / 500B / 100B market caps, topN, minInceptionDays"
+config:filter.capBuckets.0.minMarketCap,app/config/config.json,2000000000000,int,,,structural,metadata,both,,"2T / 500B / 100B market caps, topN, minInceptionDays"
+config:filter.capBuckets.0.topN,app/config/config.json,50,int,,,structural,metadata,both,,"2T / 500B / 100B market caps, topN, minInceptionDays"
+config:filter.capBuckets.1.name,app/config/config.json,"""MidCap""",str,,,structural,metadata,both,,"2T / 500B / 100B market caps, topN, minInceptionDays"
+config:filter.capBuckets.1.minMarketCap,app/config/config.json,500000000000,int,,,structural,metadata,both,,"2T / 500B / 100B market caps, topN, minInceptionDays"
+config:filter.capBuckets.1.topN,app/config/config.json,50,int,,,structural,metadata,both,,"2T / 500B / 100B market caps, topN, minInceptionDays"
+config:filter.capBuckets.2.name,app/config/config.json,"""SmallCap""",str,,,structural,metadata,both,,"2T / 500B / 100B market caps, topN, minInceptionDays"
+config:filter.capBuckets.2.minMarketCap,app/config/config.json,100000000000,int,,,structural,metadata,both,,"2T / 500B / 100B market caps, topN, minInceptionDays"
+config:filter.capBuckets.2.topN,app/config/config.json,50,int,,,structural,metadata,both,,"2T / 500B / 100B market caps, topN, minInceptionDays"
+config:paths.rawData,app/config/config.json,"""app/data/raw""",str,,,operational,metadata,live,,
+config:paths.storage,app/config/config.json,"""app/data/storage""",str,,,operational,metadata,live,,
+config:paths.health,app/config/config.json,"""app/data/health.json""",str,,,operational,metadata,live,,
+config:nse.homeUrl,app/config/config.json,"""https://www.nseindia.com""",str,,,operational,metadata,live,,
+config:nse.equityListUrl,app/config/config.json,"""https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv""",str,,,operational,metadata,live,,
+config:nse.dailyReportsUrl,app/config/config.json,"""https://www.nseindia.com/api/daily-reports?key=CM""",str,,,operational,metadata,live,,
+config:nse.maxRetries,app/config/config.json,3,int,,,operational,metadata,live,,
+config:nse.backoffSeconds,app/config/config.json,"[2, 4, 8]",list,,,operational,metadata,live,,
+config:schedule.dailyRunTime,app/config/config.json,"""19:30""",str,,,operational,metadata,live,,
+config:schedule.cleanerCron,app/config/config.json,"""0 20 1 1,4,7,10 *""",str,,,operational,metadata,live,,
+market:paths.market,app/config/market.json,"""app/data/market""",str,,,operational,market,live,,
+market:paths.upstreamStorage,app/config/market.json,"""app/data/storage""",str,,,operational,market,live,,
+market:paths.upstreamHealth,app/config/market.json,"""app/data/health.json""",str,,,operational,market,live,,
+market:paths.logs,app/config/market.json,"""app/data/logs""",str,,,operational,market,live,,
+market:paths.calendar,app/config/market.json,"""app/config/nse_calendar.json""",str,,,operational,market,live,,
+market:paths.indices,app/config/market.json,"""app/config/indices.json""",str,,,operational,market,live,,
+market:fetch.batchSize,app/config/market.json,50,int,,,operational,market,live,,
+market:fetch.batchGapSeconds,app/config/market.json,15,int,,,operational,market,live,,
+market:fetch.hourlyRequestBudget,app/config/market.json,2000,int,,,operational,market,live,,
+market:fetch.blockPauseMinutes,app/config/market.json,60,int,,,operational,market,live,,
+market:fetch.maxBlockPausesPerRun,app/config/market.json,3,int,,,operational,market,live,,
+market:fetch.maxRetries,app/config/market.json,3,int,,,operational,market,live,,
+market:fetch.backoffSeconds,app/config/market.json,"[2, 4, 8]",list,,,operational,market,live,,
+market:fetch.nullRefetchPasses,app/config/market.json,2,int,,,operational,market,live,,
+market:fetch.sessionFinalAfterIST,app/config/market.json,"""20:00""",str,,,operational,market,live,,
+market:fetch.historyStart,app/config/market.json,"""1997-01-01""",str,,,operational,market,live,,
+market:calendarSync.homeUrl,app/config/market.json,"""https://www.nseindia.com""",str,,,operational,market,live,,
+market:calendarSync.holidayUrl,app/config/market.json,"""https://www.nseindia.com/api/holiday-master?type=trading&year={year}""",str,,,operational,market,live,,
+market:calendarSync.firstYear,app/config/market.json,2011,int,,,operational,market,live,,
+market:calendarSync.maxRetries,app/config/market.json,3,int,,,operational,market,live,,
+market:calendarSync.backoffSeconds,app/config/market.json,"[2, 4, 8]",list,,,operational,market,live,,
+market:validator.rejectShareRollback,app/config/market.json,0.2,float,,,operational,market,live,,
+market:updator.lookbackDays,app/config/market.json,30,int,,,operational,market,live,,
+market:updator.deadTickerNoDataDays,app/config/market.json,5,int,,,operational,market,live,,
+market:updator.dailyRunTime,app/config/market.json,"""21:00""",str,,,operational,market,live,,
+market:archiver.cutoffDays,app/config/market.json,365,int,,,operational,market,live,,
+market:archiver.cron,app/config/market.json,"""0 22 2 1,4,7,10 *""",str,,,operational,market,live,,
+market:archiver.parquet.compression,app/config/market.json,"""zstd""",str,,,operational,market,live,,
+market:lock.staleAfterHours,app/config/market.json,6,int,,,operational,market,live,,
+market:mail.smtpHost,app/config/market.json,"""<set at deployment>""",str,,,operational,market,live,,
+market:mail.smtpPort,app/config/market.json,587,int,,,operational,market,live,,
+market:mail.sender,app/config/market.json,"""<set at deployment>""",str,,,operational,market,live,,
+market:mail.recipients,app/config/market.json,"[""<set at deployment>""]",list,,,operational,market,live,,
+code:app/analyst/common.py:3,app/analyst/common.py,3,code,,,operational,run,both,,exit code 3: gate not met
+code:app/analyst/common.py:3600,app/analyst/common.py,3600,code,,,operational,lock,both,,seconds per hour (lock age)
+code:app/analyst/costs.py:10000,app/analyst/costs.py,10000,code,,,model-input,costs,both,,basis points per unit (unit constant)
+code:app/analyst/regime.py:5,app/analyst/regime.py,5,code,,,structural,regime,both,,weekday < 5: Monday to Friday
+code:app/analyst/regime.py:7,app/analyst/regime.py,7,code,,,structural,regime,both,,days per week in the pending-regime countdown
+code:app/analyst/regime.py:9,app/analyst/regime.py,9,code,,,structural,regime,both,,UNKNOWN_EXTRA: default of regime.unknownExtra (H6)
+code:app/analyst/regime.py:50,app/analyst/regime.py,50,code,,,structural,regime,both,,DEFAULT_WINDOWS: default of regime.smaFast
+code:app/analyst/regime.py:63,app/analyst/regime.py,63,code,,,structural,regime,both,,DEFAULT_WINDOWS: default of regime.momentumDays
+code:app/analyst/regime.py:200,app/analyst/regime.py,200,code,,,structural,regime,both,,DEFAULT_WINDOWS: default of regime.smaSlow
+code:app/analyst/selector.py:5,app/analyst/selector.py,5,code,,,operational,selector,both,,rows_needed: data-load padding
+code:app/analyst/selector.py:7,app/analyst/selector.py,7,code,,,structural,selector,both,,BEAR_ROW_BUFFER: rows kept beyond the longest BEAR window
+code:app/analyst/selector.py:20,app/analyst/selector.py,20,code,,,structural,selector,both,,BEAR_WINDOWS default of selector.bearScore.windows (H1)
+code:app/analyst/selector.py:63,app/analyst/selector.py,63,code,,,structural,selector,both,,BEAR_WINDOWS default of selector.bearScore.windows (H1)
+code:app/analyst/selector.py:10000000.0,app/analyst/selector.py,10000000.0,code,,,structural,selector,both,,CRORE: rupees per crore (unit)
+code:app/analyst/signals.py:4,app/analyst/signals.py,4,code,,,operational,schedule,both,,year slice of an ISO date
+code:app/analyst/signals.py:5,app/analyst/signals.py,5,code,,,structural,schedule,both,,weekday >= 5: weekend
+code:app/analyst/signals.py:6,app/analyst/signals.py,6,code,,,structural,schedule,both,,weekday 6: Sunday
+code:app/risk/common.py:0.025,app/risk/common.py,0.025,code,,,tunable,sizing,both,,NO_TRADE_FLOOR_PCT: default of sizing.noTradeBand.floorPct (H7)
+code:app/risk/common.py:3,app/risk/common.py,3,code,,,operational,run,both,,exit code 3: gate not met
+code:app/risk/common.py:7,app/risk/common.py,7,code,,,model-input,fill,both,,CARRY_OVER_DAYS: default of shadow.carryOverDays (H9)
+code:app/risk/common.py:28,app/risk/common.py,28,code,,,regulatory,tax,both,,a 29 February entry's anniversary falls on 28 February
+code:app/risk/common.py:60,app/risk/common.py,60,code,,,operational,run,both,,RETRY_MINUTES
+code:app/risk/common.py:120,app/risk/common.py,120,code,,,operational,run,both,,"default history padding, days"
+code:app/risk/common.py:252,app/risk/common.py,252,code,,,design,metrics,both,,TRADING_DAYS_PER_YEAR: default of evaluator.tradingDaysPerYear (H11)
+code:app/risk/common.py:3600,app/risk/common.py,3600,code,,,operational,lock,both,,seconds per hour (lock age)
+code:app/risk/evaluator.py:0.05,app/risk/evaluator.py,0.05,code,,,operational,metrics,both,,CVaR tail share
+code:app/risk/evaluator.py:0.95,app/risk/evaluator.py,0.95,code,,,operational,metrics,both,,p95 of the slippage report
+code:app/risk/evaluator.py:0.99,app/risk/evaluator.py,0.99,code,,,operational,metrics,both,,XIRR bisection bound and p99 report
+code:app/risk/evaluator.py:3,app/risk/evaluator.py,3,code,,,operational,metrics,both,,minimum observations for a benchmark regression
+code:app/risk/evaluator.py:4,app/risk/evaluator.py,4,code,,,operational,metrics,both,,year slice of an ISO date
+code:app/risk/evaluator.py:7,app/risk/evaluator.py,7,code,,,operational,metrics,both,,"report window of the signal-followed rate, days"
+code:app/risk/evaluator.py:8,app/risk/evaluator.py,8,code,,,operational,metrics,both,,date slice of a signal file name
+code:app/risk/evaluator.py:100.0,app/risk/evaluator.py,100.0,code,,,operational,metrics,both,,XIRR bisection bound; percent scaling of the ulcer index
+code:app/risk/evaluator.py:200,app/risk/evaluator.py,200,code,,,operational,metrics,both,,XIRR bisection iterations
+code:app/risk/evaluator.py:365,app/risk/evaluator.py,365,code,,,operational,metrics,both,,days per year of the XIRR exponent
+code:app/risk/monitor.py:1e-06,app/risk/monitor.py,1e-06,code,,,operational,monitor,both,,rupee tolerance on the cap excess
+code:app/risk/monitor.py:0.1,app/risk/monitor.py,0.1,code,,,operational,monitor,both,,lower-circuit warning offset in percent (warning only)
+code:app/risk/monitor.py:1.6,app/risk/monitor.py,1.6,code,,,operational,monitor,both,,calendar days per trading day for the trend-MA history load
+code:app/risk/monitor.py:3,app/risk/monitor.py,3,code,,,structural,monitor,both,,sell-reason priority rank
+code:app/risk/monitor.py:4,app/risk/monitor.py,4,code,,,structural,monitor,both,,sell-reason priority rank
+code:app/risk/monitor.py:5,app/risk/monitor.py,5,code,,,structural,monitor,both,,sell-reason priority rank
+code:app/risk/monitor.py:6,app/risk/monitor.py,6,code,,,structural,monitor,both,,BUY_PRIORITY rank
+code:app/risk/monitor.py:10,app/risk/monitor.py,10,code,,,operational,monitor,both,,"trend-MA history padding, days"
+code:app/risk/monitor.py:60,app/risk/monitor.py,60,code,,,operational,monitor,both,,"history padding before an entry date, days"
+code:app/risk/monitor.py:100,app/risk/monitor.py,100,code,,,operational,monitor,both,,percent to fraction (lower-circuit warning)
+code:app/risk/nav.py:0.15,app/risk/nav.py,0.15,code,,,operational,nav,both,,JUMP: NAV jump warning threshold (warning only)
+code:app/risk/nav.py:6,app/risk/nav.py,6,code,,,operational,nav,both,,NAV column slice
+code:app/risk/run.py:3,app/risk/run.py,3,code,,,operational,run,both,,days from Friday to the next session
+code:app/risk/run.py:4,app/risk/run.py,4,code,,,operational,run,both,,weekday 4 (Friday) and slice lengths
+code:app/risk/run.py:8,app/risk/run.py,8,code,,,operational,run,both,,date slice of a targets file name
+code:app/risk/run.py:30,app/risk/run.py,30,code,,,operational,run,both,,"backup retention, days"
+code:app/risk/run.py:52,app/risk/run.py,52,code,,,operational,run,both,,"cooldown file prune, weeks (spec: not exposed on purpose)"
+code:app/risk/run.py:90,app/risk/run.py,90,code,,,operational,run,both,,"surveillance file retention, days"
+code:app/risk/tax.py:4,app/risk/tax.py,4,code,,,regulatory,tax,both,,financial year starts in April
+code:app/risk/tax.py:5,app/risk/tax.py,5,code,,,operational,tax,both,,ISO date slice
+code:app/risk/tax.py:7,app/risk/tax.py,7,code,,,operational,tax,both,,ISO date slice
+code:app/risk/tax.py:56,app/risk/tax.py,56,code,,,operational,tax,both,,NEAR_DAYS: how far ahead the report lists positions nearing 12 months
+code:app/risk/tax.py:100,app/risk/tax.py,100,code,,,operational,tax,both,,two-digit year in the financial-year label
+code:backtest/replay.py:21,backtest/replay.py,21,code,,,operational,replay,backtest,,simulated run clock (21:00 IST) of the day's decide() call; no return effect
+code:backtest/replay.py:100,backtest/replay.py,100,code,,,operational,progress,backtest,,"progress callback granularity, percent"
+code:backtest/replay.py:100000.0,backtest/replay.py,100000.0,code,,,design,capital,backtest,,simulate() default capital; callers pass backtest.json capital.inr
+code:backtest/targets.py:4,backtest/targets.py,4,code,,,operational,cache,backtest,,default size of the targets cache
+code:backtest/tax.py:3,backtest/tax.py,3,code,,,operational,tax,backtest,,lot tuple index
+code:backtest/tax.py:4,backtest/tax.py,4,code,,,regulatory,tax,backtest,,financial year ends 31 March (year slice)

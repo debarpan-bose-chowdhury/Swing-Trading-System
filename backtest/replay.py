@@ -23,7 +23,7 @@ import pandas as pd
 from app.analyst import regime
 from app.market.common import IST
 from app.market.tradingcal import Calendar
-from app.risk import nav, run as risk_run
+from app.risk import nav, run as risk_run, shadow
 from app.risk.common import TABLES, Context, Portfolio
 from backtest import fills as fillmod
 from backtest.pit import PitData, PitStore
@@ -87,7 +87,7 @@ def _restart_due(lad: dict | None, days: list[str], asof: str, after: int, cfg: 
 
 
 def simulate(data: PitData, targets: Targets, risk_cfg: dict, start: str, end: str | None = None, capital: float = 100000.0,
-             surveillance=no_surveillance, keep_signals: bool = False, carry_over_days: int = 7, reference_dir: Path | None = None,
+             surveillance=no_surveillance, keep_signals: bool = False, carry_over_days: int | None = None, reference_dir: Path | None = None,
              dividends=None, vanish_haircut: float = 0.0, progress=None, restart_after: int | None = None) -> Result:
     """Replay every index trading day from start to end (inclusive) and return the NAV rows, fills and counters.
 
@@ -105,7 +105,7 @@ def simulate(data: PitData, targets: Targets, risk_cfg: dict, start: str, end: s
     if risk_cfg["buckets"] != list(targets.names):
         raise ValueError(f"risk buckets {risk_cfg['buckets']} differ from the universe buckets {list(targets.names)}")
     book, mem, store = fillmod.Book(capital), Memory(), PitStore(data)
-    carry, rows = carry_over_days, []
+    carry, rows = shadow.carry_over_days(risk_cfg) if carry_over_days is None else carry_over_days, []
     queue: list[dict] = []
     result = Result(pd.DataFrame(), pd.DataFrame())
     newest, last_good = None, None

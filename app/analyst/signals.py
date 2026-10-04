@@ -224,7 +224,7 @@ def run(cfg: dict, now: datetime, log: logging.Logger, report: Report, args) -> 
                 return
             check_gate(cfg, cal, rebalance)
         close = regime.index_close(cfg)
-        history = regime.regime_history(close, cfg["regime"]["persistenceWeeks"], regime.windows_of(cfg))
+        history = regime.regime_history(close, cfg["regime"]["persistenceWeeks"], regime.windows_of(cfg), **regime.shape_of(cfg))
         if replay:
             before = history.date[history.date <= args.as_of]
             if before.empty:

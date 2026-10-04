@@ -1,0 +1,18 @@
+{
+ "early": {
+  "fillCount": 67,
+  "fills": "eb63457c8f98d253e595882a4102744532d07b1ee86085d40f0f298e218d6338",
+  "nav": "1d70d85b9545150503e6df1527c49d1eb5afbfccd6a8b976f2c28f0ff27b51bc",
+  "rows": 261,
+  "signals": "ef9f2cf981b1adbd4db75155930e2bc6e77b5b7bd3a33065fad36cf3565c7ae5",
+  "targets": "814a8fbbe40e4990f0defd0619cbf3a91c73cff1e5780090b1fccbc55426840a"
+ },
+ "late": {
+  "fillCount": 116,
+  "fills": "228826e3b5dd09811f416a73ffa427d16694f2d8dd4f94bfeea52febaa7c9bf2",
+  "nav": "5fdd7596ffd1c68860327174dc598a66676101fed09abf85b8816406d05ecec6",
+  "rows": 321,
+  "signals": "103a2361b767ccc855a4d688cff3cba34c780b089623c10e39b35fd75544dfd1",
+  "targets": "94205287cfff50891a0fd1c99201d8962f2eeb7344edf346e57b295fa61b7391"
+ }
+}

@@ -171,3 +171,44 @@ class RunStageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExposedNumberValidation(unittest.TestCase):
+    def bad(self, mutate):
+        c = cfg()
+        mutate(c)
+        with self.assertRaises(ValueError):
+            common.validate(c)
+
+    def test_shipped_defaults_equal_the_previously_hardcoded_values(self):
+        c = cfg()
+        self.assertEqual(c["selector"]["bearScore"]["windows"], {"shortDays": 20, "longDays": 63, "hitDays": 20, "volDays": 20, "ddDays": 63})
+        self.assertEqual((c["selector"]["minMomentum"], c["selector"]["trendBuffer"], c["selector"]["bearScore"]["confirmThreshold"]), (0.0, 0.0, 0.0))
+        self.assertEqual((c["regime"]["momentumThreshold"], c["regime"]["unknownExtra"]), (0.0, 9))
+
+    def test_new_keys_are_range_and_type_checked(self):
+        self.bad(lambda c: c["selector"]["bearScore"]["windows"].update(longDays=1))
+        self.bad(lambda c: c["selector"]["bearScore"]["windows"].update(hitDays=2.5))
+        self.bad(lambda c: c["selector"]["bearScore"]["windows"].update(extraDays=20))
+        self.bad(lambda c: c["selector"]["bearScore"].update(confirmThreshold="0"))
+        self.bad(lambda c: c["selector"].update(minMomentum=-2))
+        self.bad(lambda c: c["selector"].update(trendBuffer="x"))
+        self.bad(lambda c: c["regime"].update(unknownExtra=-1))
+        self.bad(lambda c: c["regime"].update(unknownExtra=True))
+        self.bad(lambda c: c["regime"].update(momentumThreshold=None))
+
+    def test_min_rows_follows_unknown_extra(self):
+        self.bad(lambda c: c["regime"].update(unknownExtra=10))  # 200 + 10 + 1 > 210
+        c = cfg()
+        c["regime"].update(unknownExtra=0, minRows=201)
+        common.validate(c)
+
+    def test_a_missing_new_key_is_valid(self):
+        c = cfg()
+        for k in ("minMomentum", "trendBuffer"):
+            c["selector"].pop(k)
+        for k in ("windows", "confirmThreshold"):
+            c["selector"]["bearScore"].pop(k)
+        for k in ("momentumThreshold", "unknownExtra"):
+            c["regime"].pop(k)
+        common.validate(c)

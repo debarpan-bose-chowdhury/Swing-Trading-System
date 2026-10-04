@@ -111,3 +111,40 @@ class LadderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExposedLadderNumbers(unittest.TestCase):
+    def setUp(self):
+        self.c = cfg()
+        self.s = ladder.new_state("2026-09-01", 1.0)
+
+    def test_h8_rungs_per_week_default_is_one(self):
+        self.c["ladder"]["reRisk"]["rungsPerWeek"] = 1
+        s, _ = go(self.s, 0.78, "2026-09-02", self.c)
+        _, info = go(s, 0.95, "2026-09-04", self.c, rebalance=True, hist=[0.7] * 25)
+        self.assertEqual(info["rung"], 2)
+
+    def test_h8_two_rungs_per_week_and_never_below_the_drawdown_floor(self):
+        self.c["ladder"]["reRisk"]["rungsPerWeek"] = 2
+        s, _ = go(self.s, 0.78, "2026-09-02", self.c)  # rung 3
+        s, info = go(s, 0.95, "2026-09-04", self.c, rebalance=True, hist=[0.7] * 25)  # drawdown 5%: floor 0
+        self.assertEqual(info["rung"], 1)
+        s, info = go(s, 0.95, "2026-09-04", self.c, rebalance=True, hist=[0.7] * 25)  # the same ISO week: no second step
+        self.assertEqual(info["rung"], 1)
+        s, info = go(s, 0.95, "2026-09-11", self.c, rebalance=True, hist=[0.7] * 25)
+        self.assertEqual(info["rung"], 0)
+        s2, _ = go(self.s, 0.78, "2026-09-02", self.c)
+        _, info = go(s2, 0.88, "2026-09-04", self.c, rebalance=True, hist=[0.7] * 25)  # 12% drawdown: floor 1, so 3 - 2 = 1
+        self.assertEqual(info["rung"], 1)
+        s3, _ = go(self.s, 0.78, "2026-09-02", self.c)
+        _, info = go(s3, 0.84, "2026-09-04", self.c, rebalance=True, hist=[0.7] * 25)  # 16% drawdown: floor 2 stops the step at 2
+        self.assertEqual(info["rung"], 2)
+
+    def test_h8_restart_rung_offset(self):
+        s, _ = go(self.s, 0.74, "2026-09-02", self.c)
+        for offset, rung in ((None, 3), (1, 3), (2, 2), (4, 0)):
+            c = cfg(restart="2026-09-10")
+            if offset:
+                c["ladder"]["restartRungOffset"] = offset
+            _, info = go(s, 0.80, "2026-09-10", c)
+            self.assertEqual(info["rung"], rung, offset)

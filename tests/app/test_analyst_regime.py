@@ -138,3 +138,26 @@ class HistoryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExposedRegimeNumbers(unittest.TestCase):
+    def test_h5_momentum_threshold_gates_bull(self):
+        close = series([1000 + 2 * i for i in range(250)])
+        self.assertEqual(regime.raw_regimes(close).iloc[-1], "BULL")
+        self.assertEqual(regime.raw_regimes(close, momentum_threshold=0.0).iloc[-1], "BULL")
+        self.assertEqual(regime.raw_regimes(close, momentum_threshold=5.0).iloc[-1], "TREND")  # above both averages, but 63-day return < 500%
+
+    def test_h6_unknown_extra_sets_the_warm_up(self):
+        close = series([1000 + i for i in range(260)])
+        pd.testing.assert_series_equal(regime.raw_regimes(close), regime.raw_regimes(close, unknown_extra=9))
+        raw = regime.raw_regimes(close, unknown_extra=0)
+        self.assertTrue((raw.iloc[:200] == "Unknown").all())
+        self.assertNotEqual(raw.iloc[200], "Unknown")
+
+    def test_shape_comes_from_config_with_defaults(self):
+        self.assertEqual(regime.shape_of({"regime": {}}), {"momentum_threshold": 0.0, "unknown_extra": 9})
+        self.assertEqual(regime.shape_of({"regime": {"momentumThreshold": 0.1, "unknownExtra": 3}}), {"momentum_threshold": 0.1, "unknown_extra": 3})
+
+    def test_history_passes_the_shape_through(self):
+        close = series([1000 + 2 * i for i in range(300)])
+        self.assertNotEqual(list(regime.regime_history(close, 1).raw_regime), list(regime.regime_history(close, 1, momentum_threshold=5.0).raw_regime))

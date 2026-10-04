@@ -221,3 +221,71 @@ class LoadingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def bear_prices():
+    rng = np.random.default_rng(3)
+    return {f"S{i}": list(100 * np.cumprod(1 + rng.normal(0.004, 0.005 + 0.004 * i, 160))) for i in range(8)}
+
+
+class ExposedSelectorNumbers(unittest.TestCase):
+    """Parameter Exposure H1-H4: each number set to its default changes nothing; set to another value it moves the result."""
+
+    def bear(self, **over):
+        s = sel()
+        s["bearScore"] = {**s["bearScore"], **over}
+        return pick(bear_prices(), {**STRATEGY, "top_n": 99}, regime="BEAR", s=s)[0]
+
+    def test_h1_default_windows_equal_the_hardcoded_ones(self):
+        explicit = self.bear(windows={"shortDays": 20, "longDays": 63, "hitDays": 20, "volDays": 20, "ddDays": 63}, confirmThreshold=0.0)
+        self.assertEqual(explicit, self.bear())
+        self.assertEqual(selector.bear_rows(CFG["selector"]["bearScore"]), 70)
+        self.assertEqual(selector.rows_needed(CFG), selector.rows_needed({**CFG, "selector": {**CFG["selector"], "bearScore": {k: v for k, v in CFG["selector"]["bearScore"].items() if k != "windows"}}}))
+
+    def test_h1_each_window_changes_the_score(self):
+        base = {p["ticker"]: p["score"] for p in self.bear()}
+        for key, value in (("shortDays", 10), ("longDays", 40), ("hitDays", 10), ("volDays", 40), ("ddDays", 5)):
+            moved = {p["ticker"]: p["score"] for p in self.bear(windows={key: value})}
+            self.assertNotEqual(moved, base, key)
+
+    def test_h1_score_follows_the_configured_windows(self):
+        adj, _ = panel(bear_prices())
+        w = {"shortDays": 10, "longDays": 40, "hitDays": 15, "volDays": 30, "ddDays": 25}
+        got = {p["ticker"]: p["score"] for p in self.bear(windows=w)}
+        for t, score in got.items():
+            px = adj[t].dropna()
+            ret = px.pct_change()
+            want = (0.40 * (px.iloc[-1] / px.iloc[-11] - 1) + 0.35 * (px.iloc[-1] / px.iloc[-41] - 1) + 0.20 * (ret.iloc[-15:] > 0).mean()
+                    - 0.35 * ret.iloc[-30:].std(ddof=0) + 0.10 * (px.iloc[-1] / px.iloc[-26:].max() - 1))
+            self.assertAlmostEqual(score, round(want, 6), places=6)
+
+    def test_h1_minimum_rows_follow_the_longest_window(self):
+        self.assertEqual(selector.bear_rows({"windows": {"longDays": 100}}), 107)
+        need = lambda longest: selector.rows_needed({**CFG, "selector": {**CFG["selector"], "bearScore": {**CFG["selector"]["bearScore"], "windows": {"longDays": longest}}}})  # noqa: E731
+        self.assertGreater(need(300), need(63))
+
+    def test_h2_min_momentum_filters_candidates_in_every_regime(self):
+        prices = {"A": rising(step=1), "B": rising(step=3)}  # 20-day momentum: A about 0.10, B about 0.15
+        self.assertEqual(names(pick(prices)[0]), ["B", "A"])
+        self.assertEqual(names(pick(prices, s=sel(minMomentum=0.0))[0]), ["B", "A"])
+        self.assertEqual(names(pick(prices, s=sel(minMomentum=0.12))[0]), ["B"])
+        self.assertEqual(names(pick(prices, regime="BEAR", s=sel(minMomentum=0.12))[0]), ["B"])
+
+    def test_h3_trend_buffer_requires_price_above_the_average_by_the_margin(self):
+        prices = {"A": rising()}
+        picks, _ = pick(prices)
+        gap = picks[0]["price"] / picks[0]["trendMa"] - 1
+        self.assertEqual(names(pick(prices, s=sel(trendBuffer=0.0))[0]), ["A"])
+        self.assertEqual(names(pick(prices, s=sel(trendBuffer=gap * 0.9))[0]), ["A"])
+        self.assertEqual(names(pick(prices, s=sel(trendBuffer=gap * 1.1))[0]), [])
+
+    def test_h4_confirm_threshold_moves_the_bear_tiers(self):
+        pullback = list(np.linspace(100, 300, 70)) + list(np.linspace(300, 200, 28)) + list(np.linspace(200, 230, 22))
+        steady = list(np.linspace(150, 180, 120))
+        strategy = {**STRATEGY, "stock_trend_ma": 20}
+        invert = {"mom20": -1.0, "mom63": -1.0, "hit20": 0.0, "vol20": 0.0, "dd63": 0.0}  # B scores higher than A, but only A has positive momentum
+        tiered = lambda **o: names(pick({"B": pullback, "A": steady}, strategy, regime="BEAR", s=sel(bearScore={**invert, **o}))[0])  # noqa: E731
+        self.assertEqual(tiered(), ["A", "B"])
+        self.assertEqual(tiered(confirmThreshold=0.0), ["A", "B"])
+        self.assertEqual(tiered(confirmThreshold=-0.9), ["B", "A"])  # both confirm now: the score alone orders them
+        self.assertEqual(tiered(confirmThreshold=5.0), ["B", "A"])  # neither confirms: the same

@@ -12,7 +12,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from app.market.common import atomic
-from backtest import config, prep, replay, report, tax, workers, world
+from backtest import api, config, prep, report, tax, workers, world
 
 
 def check() -> int:
@@ -37,13 +37,8 @@ def evaluate(cfg: dict, w: world.World, start: str | None, end: str | None, hair
     """One judge run on a built world; returns the report. haircut: the write-off on a position whose ticker stopped trading."""
     start = start or cfg["window"]["start"] or w.first_known_regime()
     end = end or cfg["window"]["end"]
-    result = replay.simulate(w.data, w.targets, w.risk, start, end, cfg["capital"]["inr"], w.surveillance, carry_over_days=cfg["fill"]["carryOverDays"],
-                             dividends=w.dividends, vanish_haircut=haircut, progress=progress, restart_after=config.restart_after(cfg))
-    if result.nav.empty:
-        raise ValueError(f"no simulated days between {start} and {end}")
-    pieces = tax.lots(result.fills)
-    taxes = tax.assess(pieces, cfg["tax"]["schedule"])
-    post = tax.post_tax_curve(result.nav, taxes)
+    ev = api.evaluate_config(w, w.risk, w.analyst, start, end, haircut=haircut, progress=progress)
+    result, pieces, taxes, post = ev.result, ev.pieces, ev.taxes, ev.post_tax_nav
     meta = {"configHash": world.config_hash(cfg, w.risk, w.analyst), "dataHash": w.data.data_hash(), "codeSha": world.code_sha(),
             "entryViewMismatch": tax.entry_view_mismatch(pieces), "missingHistory": w.data.missing(),
             "tradedNames": _traded_names(w.data, result.fills)}

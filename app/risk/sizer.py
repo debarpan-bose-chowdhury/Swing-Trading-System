@@ -6,7 +6,7 @@ import pandas as pd
 
 from app.analyst import costs
 from app.risk import monitor, stops, surveil
-from app.risk.common import Context
+from app.risk.common import NO_TRADE_FLOOR_PCT, Context
 
 
 def drop_reason(T: dict, bucket: str) -> str:
@@ -71,7 +71,7 @@ def plan_sells(ctx: Context, held: list[dict], st: dict, cands: dict, tgts: list
         if p is None or not p["has_row"] or p["ticker"] in cands:
             continue
         gap, target_w = x["n"] - p["value"], x["n"] / nav
-        band = max(sz["noTradeBand"]["relative"] * target_w, sz["noTradeBand"]["absolutePct"], 0.025)
+        band = max(sz["noTradeBand"]["relative"] * target_w, sz["noTradeBand"]["absolutePct"], sz["noTradeBand"].get("floorPct", NO_TRADE_FLOOR_PCT))
         if abs(gap) / nav <= band or abs(gap) < sz["minAdjustmentInr"]:
             continue
         if gap < 0:
