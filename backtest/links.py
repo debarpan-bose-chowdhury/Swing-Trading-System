@@ -5,6 +5,7 @@ columns are confirmed with --probe-symbolchange), and the ISIN chain in the bhav
 Early files (2007 to about 2010) carry no ISIN, so renames from those years need the manual table or the NSE file.
 """
 
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -29,7 +30,11 @@ def isin_links(rows: pd.DataFrame) -> pd.DataFrame:
 
 
 def manual_links(path: Path) -> pd.DataFrame:
-    path = safe_path(path)
+    base = os.path.realpath(os.getcwd())
+    full = os.path.realpath(os.path.join(base, path))
+    if not full.startswith(base + os.sep):  # inline, so the check sits next to the file access
+        raise ValueError(f"path escapes the working directory: {path}")
+    path = Path(full)
     if not path.exists():
         return pd.DataFrame(columns=LINK_COLS)
     m = pd.read_csv(path, dtype=str, keep_default_na=False)

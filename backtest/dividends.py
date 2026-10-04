@@ -5,12 +5,12 @@ Live shadow never credits dividends (it runs with no cash flows); the backtest d
 Tax on dividends is not modelled (slab-rate income); the report says so.
 """
 
+import os
 from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
 
-from app.market.common import safe_path
 from backtest.fills import Book
 
 
@@ -23,7 +23,11 @@ class Dividends:
 
     @classmethod
     def load(cls, path: Path) -> "Dividends":
-        path = safe_path(path)
+        base = os.path.realpath(os.getcwd())
+        full = os.path.realpath(os.path.join(base, path))
+        if not full.startswith(base + os.sep):  # inline, so the check sits next to the file access
+            raise ValueError(f"path escapes the working directory: {path}")
+        path = Path(full)
         return cls(pd.read_csv(path, dtype={"Ticker": str, "ExDate": str}) if path.exists() else None)
 
     def credit(self, book: Book, asof: str) -> list[dict]:
