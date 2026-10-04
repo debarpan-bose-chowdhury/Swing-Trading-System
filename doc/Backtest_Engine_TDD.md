@@ -171,3 +171,10 @@ Recorded so the next reader knows what the engine produced before any tuning. Ta
 | Names later stopped / write-off exits | 0 / 0 | 0 / 0 (write-off 50% and 100% identical to 0%) |
 
 Benchmark (Nifty price index): +9.8% CAGR, max drawdown -45.4%, Sharpe 0.29. Readings: (1) the live rules at these settings do not beat the index over this window; (2) the point-in-time universe costs about 3 points of CAGR against today's names, an estimate of the survivorship bias in a losing strategy, with the residual-bias caveats above; (3) charges are the main leak at this account size (about Rs 27 per fill against positions of a few thousand rupees), which the sizing minimums should be tuned against; (4) the 2008 start (a 21% realised loss in the first FY) triggers the flat-lock in every run.
+
+### First parity run on real data (2026-10-04, `backtest.parity --targets --signals`)
+
+- **Replay:** 16 of 16 sampled rebalance dates (2008-07-25 to 2026-10-01, 8 recent and 8 spread over the history) match the app's own `--as-of` logic exactly (regime, composition, picks, ranks, numbers; worst relative difference 0.0) when both use the same universe. This validates the backtest's panel slicing, regime history and windows against the app's selector on real prices. The selector itself is the same code in both, so it does not test the selector.
+- **Stored target file (2026-10-01):** regime, composition, LargeCap and every number match; two picks differ in MidCap (PAYTM vs LAURUSLABS) and SmallCap (IPCALAB vs WOCKPHARMA). The live-only names are not in the newest bucket file the backtest uses (they have no stored rows in the backtest's data), which is bucket churn between the file of the day and today's file. The file of the day has been purged, so this is inferred, not proven.
+- **Stored signals file (1):** regime, weekly flag, execution date and exposure caps match.
+- **Not covered:** the book, NAV, ladder state and actions of a real account; only one stored signals file exists so far.
