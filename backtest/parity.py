@@ -27,11 +27,16 @@ import io
 import json
 import logging
 import sys
+from contextlib import nullcontext
 from datetime import date, datetime
 from pathlib import Path
+from unittest.mock import patch
+
+import pandas as pd
 
 from app.analyst import common as analyst_common
-from app.analyst import regime, signals
+from app.analyst import regime, selector, signals
+from app.market import registry
 from app.market.common import IST, atomic
 from app.market.tradingcal import Calendar
 from app.risk import common as risk_common
@@ -95,16 +100,66 @@ def sample_dates(dates: list[str], recent: int, spread: int) -> list[tuple[str, 
     return [(d, "history") for d in dict.fromkeys(picks)] + [(d, "recent") for d in recent_part]
 
 
-def live_replay(acfg: dict, asof: str) -> dict:
-    """The app's own read-only replay of the rebalance date on or before asof, as the targets dict it would print."""
+def newest_universe(cfg: dict, bucket: str, rebalance: str) -> tuple[str, list[str]]:
+    """selector.bucket_universe without the date rule: the newest bucket file, whatever its date. This is the universe the backtest
+    (mode today) trades, so a replay on it isolates the selection logic from the universe churn the app's date rule would add."""
+    files = sorted((f.stem.rsplit("_", 1)[1], f) for f in Path(cfg["paths"]["upstreamStorage"]).glob(f"{bucket}_*.csv"))
+    if not files:
+        raise ValueError(f"no {bucket} bucket file in {cfg['paths']['upstreamStorage']}")
+    day, path = files[-1]
+    return day, sorted(set(pd.read_csv(path, dtype=str, keep_default_na=False)["Symbol"]) - {""})
+
+
+def live_replay(acfg: dict, asof: str, app_universe: bool = False) -> dict:
+    """The app's own read-only replay of the rebalance date on or before asof, as the targets dict it would print.
+
+    By default the newest bucket file is the universe (see newest_universe); app_universe=True keeps the app's own rule (the newest
+    file dated on or before the date, refused when absent or too old), which the app's storage retention usually cannot satisfy for past dates.
+    """
     out = io.StringIO()
     now = datetime.now(IST)
-    with contextlib.redirect_stdout(out):
+    with contextlib.redirect_stdout(out), (nullcontext() if app_universe else patch.object(selector, "bucket_universe", newest_universe)):
         signals.run(acfg, now, LOG, analyst_common.Report("signals"), argparse.Namespace(force=False, as_of=asof, check=False))
     return json.loads(out.getvalue())
 
 
+def pick_gaps(mine: dict, live: dict) -> dict[str, tuple[list[str], list[str]]]:
+    """bucket -> (picked only by the backtest, picked only by the live file)."""
+    out = {}
+    for b in sorted(set(mine["buckets"]) & set(live["buckets"])):
+        x = [p["ticker"] for p in mine["buckets"][b].get("selected", [])]
+        y = [p["ticker"] for p in live["buckets"][b].get("selected", [])]
+        if set(x) != set(y):
+            out[b] = (sorted(set(x) - set(y)), sorted(set(y) - set(x)))
+    return out
+
+
+def explain_gaps(gaps: dict, tg: Targets, acfg: dict, asof: str) -> list[str]:
+    """Why a pick is on one side only: universe membership, the registry's status, stored history, and which bucket files exist."""
+    storage = Path(acfg["paths"]["upstreamStorage"])
+    reg_path = Path(acfg["paths"]["market"]) / "registry.csv"
+    reg = registry.load(reg_path) if reg_path.exists() else None
+    lines = []
+    for b, (only_mine, only_live) in gaps.items():
+        days = sorted(f.stem.rsplit("_", 1)[1] for f in storage.glob(f"{b}_*.csv"))
+        before = [d for d in days if d <= asof]
+        lines.append(f"{b}: bucket files {days[0]}..{days[-1]} ({len(days)}); newest on or before {asof}: {before[-1] if before else 'none'}" if days else f"{b}: no bucket files")
+        members = set(tg.data.buckets.get(b, []))
+        old = set(pd.read_csv(storage / f"{b}_{before[-1]}.csv", dtype=str, keep_default_na=False)["Symbol"]) if before else None
+        for t in only_live:
+            n = len(tg.data.series[t]) if t in tg.data.series else 0
+            lines.append(f"  live-only {t}: in the backtest universe {'yes' if t in members else 'NO'}; registry {_status(reg, t)}; {n} stored rows")
+        for t in only_mine:
+            lines.append(f"  backtest-only {t}: in the file of the day {'yes' if old is not None and t in old else ('NO' if old is not None else 'n/a (no file)')}; registry {_status(reg, t)}")
+    return lines
+
+
+def _status(reg, t: str) -> str:
+    return "unknown" if reg is None or t not in reg.index else str(reg.at[t, "status"])
+
+
 def check_targets(cfg: dict, acfg: dict, tg: Targets, recent: int, spread: int, replay=live_replay) -> dict:
+    """replay(acfg, date) -> the app's targets for the date; see live_replay."""
     known = [d for d, a in zip(tg.dates, tg.active, strict=True) if a != "Unknown"]
     rows = []
     for d, kind in sample_dates(known, recent, spread):
@@ -115,7 +170,11 @@ def check_targets(cfg: dict, acfg: dict, tg: Targets, recent: int, spread: int, 
             rows.append({"date": d, "kind": kind, "source": "replay", "status": "LIVE_REFUSED", "detail": f"{type(e).__name__}: {str(e)[:160]}"})
             continue
         diffs, worst = diff(mine, live, REPLAY_TOL)
-        rows.append({"date": d, "kind": kind, "source": "replay", "status": "DIFF" if diffs else "MATCH", "detail": diffs[:8], "worstRelDiff": worst})
+        row = {"date": d, "kind": kind, "source": "replay", "status": "DIFF" if diffs else "MATCH", "detail": diffs[:8], "worstRelDiff": worst}
+        gaps = pick_gaps(mine, live)
+        if gaps:
+            row["explain"] = explain_gaps(gaps, tg, acfg, d)
+        rows.append(row)
     folder = Path(acfg["paths"]["analyst"]) / "targets"
     for f in sorted(folder.glob("targets_*.json")) if folder.exists() else []:
         d = f.stem.removeprefix("targets_")
@@ -125,7 +184,11 @@ def check_targets(cfg: dict, acfg: dict, tg: Targets, recent: int, spread: int, 
             rows.append({"date": d, "kind": "stored", "source": "stored", "status": "NO_BACKTEST_ROW", "detail": "the backtest regime history has no row for this date"})
             continue
         diffs, worst = diff(mine, live, STORED_TOL, numbers_fail=False)
-        rows.append({"date": d, "kind": "stored", "source": "stored", "status": "DIFF" if diffs else "MATCH", "detail": diffs[:8], "worstRelDiff": worst})
+        row = {"date": d, "kind": "stored", "source": "stored", "status": "DIFF" if diffs else "MATCH", "detail": diffs[:8], "worstRelDiff": worst}
+        gaps = pick_gaps(mine, live)
+        if gaps:
+            row["explain"] = explain_gaps(gaps, tg, acfg, d)
+        rows.append(row)
     return {"rows": rows}
 
 
@@ -166,6 +229,7 @@ def summarize(name: str, part: dict) -> list[str]:
             tag = f"{r.get('kind', '')}/{r.get('source', '')}".strip("/")
             detail = r["detail"] if isinstance(r["detail"], str) else "; ".join(r["detail"])
             lines.append(f"  {r['date']} {r['status']} ({tag}) {detail}"[:400])
+            lines += [f"    {x}" for x in r.get("explain", [])]
     return lines
 
 
@@ -180,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="list which inputs exist; no comparison")
     parser.add_argument("--targets", action="store_true", help="backtest targets vs the app's replay and vs stored live target files")
     parser.add_argument("--signals", action="store_true", help="stored live signals vs the backtest's regime, rebalance rule and exposure caps")
+    parser.add_argument("--app-universe", action="store_true", help="--targets: replay with the app's own bucket-file date rule (usually refused for past dates: older files are purged)")
     parser.add_argument("--recent", type=int, default=8, help="--targets: newest rebalance dates replayed (the live universe still applies)")
     parser.add_argument("--spread", type=int, default=8, help="--targets: older dates, evenly spaced over the history")
     args = parser.parse_args(argv)
@@ -196,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
         report: dict = {"generatedAt": datetime.now(IST).isoformat(timespec="seconds"), "inputs": found}
         lines: list[str] = []
         if args.targets:
-            report["targets"] = check_targets(cfg, acfg, tg, args.recent, args.spread)
+            report["targets"] = check_targets(cfg, acfg, tg, args.recent, args.spread, lambda a, d: live_replay(a, d, args.app_universe))
             lines += summarize("targets", report["targets"])
         if args.signals:
             report["signals"] = check_signals(cfg, rcfg, tg, Calendar(rcfg["paths"]["calendar"]))

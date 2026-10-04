@@ -128,3 +128,32 @@ class Cli(World):
             code = parity.main(["--check"])
         self.assertEqual(code, 0)
         self.assertIn("stored live targets 0, stored live signals 0", out.getvalue())
+
+
+class Universe(World):
+    def test_a_replay_uses_the_newest_bucket_file_unless_the_apps_own_date_rule_is_asked_for(self):
+        storage = Path(self.cfg["paths"]["upstreamStorage"])
+        for f in list(storage.glob("*_*.csv")):  # every bucket file is now dated after the dates replayed
+            b = f.stem.rsplit("_", 1)[0]
+            f.rename(storage / f"{b}_2030-01-01.csv")
+        tg = Targets(self.data, self.cfg)
+        d = [x for x, a in zip(tg.dates, tg.active, strict=True) if a != "Unknown"][-1]
+        got = parity.live_replay(self.cfg, d)
+        self.assertEqual(parity.diff(tg.build(d), got, 1e-9)[0], [])
+        with self.assertRaisesRegex(ValueError, "bucket file on or before"):
+            parity.live_replay(self.cfg, d, app_universe=True)
+
+    def test_pick_gaps_and_their_explanation_name_the_cause(self):
+        tg = Targets(self.data, self.cfg)
+        d = [x for x, a in zip(tg.dates, tg.active, strict=True) if a != "Unknown"][-1]
+        mine = tg.build(d)
+        live = copy.deepcopy(mine)
+        bucket = next(b for b, e in live["buckets"].items() if e["selected"])
+        live["buckets"][bucket]["selected"][0]["ticker"] = "GONE"
+        gaps = parity.pick_gaps(mine, live)
+        self.assertEqual(list(gaps), [bucket])
+        only_mine, only_live = gaps[bucket]
+        self.assertEqual(only_live, ["GONE"])
+        lines = parity.explain_gaps(gaps, tg, self.cfg, d)
+        self.assertTrue(any("live-only GONE: in the backtest universe NO" in x for x in lines), lines)
+        self.assertTrue(any(f"backtest-only {only_mine[0]}: in the file of the day yes" in x for x in lines), lines)
