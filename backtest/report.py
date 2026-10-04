@@ -4,9 +4,11 @@ import pandas as pd
 
 from app.risk import evaluator
 
-LABELS = ["Upper bound: survivorship-biased (today's bucket members, today's bucket labels)",
-          "Charges at current Angel One rates for all years",
+LABELS = ["Charges at current Angel One rates for all years",
           "Tax is an estimate: no surcharge, loss carry-forward, 2018 grandfathering or dividend income tax"]
+
+UNIVERSE_LABELS = {"today": "Upper bound: survivorship-biased (today's bucket members, today's bucket labels)",
+                   "pit": "Point-in-time universe (liquidity-rank buckets, dead names included); residual bias: holes in the top 150, no dividends on bhavcopy-derived names, mergers exit at the last price"}
 
 
 def _returns(curve: pd.Series) -> pd.Series:
@@ -43,7 +45,7 @@ def build(result, taxes: dict, post: pd.Series, risk_cfg: dict, bt_cfg: dict, su
     traded = float((f.qty * f.price).sum()) if len(f) else 0.0
     return {
         **meta,
-        "labels": LABELS + ["Tax schedule is a DRAFT until backtest.json tax.confirmed is true" if not bt_cfg["tax"]["confirmed"] else "Tax schedule confirmed"]
+        "labels": [UNIVERSE_LABELS[bt_cfg["universe"]["mode"]]] + LABELS + ["Tax schedule is a DRAFT until backtest.json tax.confirmed is true" if not bt_cfg["tax"]["confirmed"] else "Tax schedule confirmed"]
                   + (["Surveillance: PROVISIONAL price-behaviour proxy"] if surv_on else ["Surveillance NOT modelled (entries allowed, nothing flagged)"]),
         "window": {"start": nav.date.iloc[0], "end": nav.date.iloc[-1], "days": len(nav)},
         "objectives": {"postTaxCagr": perf_post.get("cagr"), "maxDrawdown": perf_post.get("maxDrawdown"), "ulcerIndex": perf_post.get("ulcerIndex")},

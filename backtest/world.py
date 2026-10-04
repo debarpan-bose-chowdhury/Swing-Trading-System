@@ -12,7 +12,7 @@ from pathlib import Path
 
 from app.analyst import common as analyst_common
 from app.risk import common as risk_common
-from backtest import prep, surv_proxy
+from backtest import params, prep, surv_proxy
 from backtest.dividends import Dividends
 from backtest.pit import PitData
 from backtest.targets import Targets
@@ -71,3 +71,22 @@ class World:
         """First rebalance date whose active regime is known (the earliest day anything can be selected)."""
         h = self.targets.history
         return str(h[h.active_regime != "Unknown"].date.iloc[0])
+
+
+def parse_set(items: list[str]) -> dict:
+    """--set key=value pairs (numbers) -> a partial parameter point."""
+    out = {}
+    for item in items:
+        key, _, raw = item.partition("=")
+        if not raw:
+            raise ValueError(f"--set expects key=value, got {item!r}")
+        out[key] = int(raw) if raw.lstrip("-").isdigit() else float(raw)
+    return out
+
+
+def with_point(w: World, point: dict) -> World:
+    """The world with a parameter point from params.json applied (identity when the point is empty)."""
+    if not point:
+        return w
+    risk, analyst = params.Schema.load(w.cfg["paths"]["params"], w.risk, w.analyst).apply(point)
+    return World(w.cfg, risk, analyst, w.data, Targets(w.data, analyst), w.dividends, w.surveillance)

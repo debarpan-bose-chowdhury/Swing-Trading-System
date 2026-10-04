@@ -271,8 +271,8 @@ history and measured results: `doc/Backtest_Implementation_Plan.md`.
 uv run --project backtest python -m backtest.run --check          # config + app side, no network, no writes
 uv run --project backtest python -m backtest.prep --check         # is the data ready
 uv run --project backtest python -m backtest.prep --dividends     # Yahoo dividends and splits (network)
-uv run --project backtest python -m backtest.run --single         # one judge run -> backtest/data/runs/run_*.json
-uv run --project backtest python -m backtest.run --compare        # today's names vs point-in-time, 0/50/100% write-off of vanished names
+uv run --project backtest python -m backtest.run --single --set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500   # one judge run (Rs 1 lakh needs lower sizing minimums to trade) -> backtest/data/runs/run_*.json
+uv run --project backtest python -m backtest.run --compare --set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500   # today's names vs point-in-time, 0/50/100% write-off of vanished names
 uv run --project backtest pytest -c backtest/pyproject.toml       # offline tests
 ```
 

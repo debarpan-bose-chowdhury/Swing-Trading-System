@@ -10,8 +10,19 @@ import pandas as pd
 
 from app.risk import common as risk_common
 from app.risk import surveil
-from backtest import config, dividends, fills, pit, prep, run, surv_proxy, tax
-from tests.backtest.helpers import repo_config, bars, weekdays
+from backtest import (
+    config,
+    dividends,
+    fills,
+    pit,
+    prep,
+    report,
+    run,
+    surv_proxy,
+    tax,
+    world,
+)
+from tests.backtest.helpers import bars, repo_config, weekdays
 from tests.backtest.test_targets import World
 
 REPO = Path(__file__).resolve().parents[2]
@@ -172,6 +183,18 @@ class SingleRun(World):
         self.bt["universe"]["adjustValidated"] = False
         with self.assertRaisesRegex(prep.MissingInput, "adjustValidated"):
             run.compare(self.bt, None, None)
+
+    def test_a_set_point_makes_the_hundred_thousand_account_trade_and_the_label_follows_the_mode(self):
+        self.bt["overrides"]["risk"] = {}
+        Path("backtest/config").mkdir(parents=True, exist_ok=True)
+        shutil.copy(REPO / "backtest/config/params.json", "backtest/config/params.json")
+        pt = world.parse_set(["sizing.minNewOrderInr=3000", "sizing.minAdjustmentInr=1500"])
+        self.assertEqual(pt, {"sizing.minNewOrderInr": 3000, "sizing.minAdjustmentInr": 1500})
+        rep = json.loads(run.single(self.bt, self.days[400], self.days[560], pt).read_text())
+        self.assertGreater(rep["trades"]["fills"], 5)
+        self.assertTrue(any("survivorship" in x for x in rep["labels"]))
+        self.assertEqual(report.UNIVERSE_LABELS.keys(), {"today", "pit"})
+        self.assertNotIn("survivorship", report.UNIVERSE_LABELS["pit"])
 
     def test_the_report_counts_vanished_names(self):
         rep = json.loads(run.single(self.bt, self.days[400], self.days[560]).read_text())

@@ -10,8 +10,8 @@ simulations a full strict-gate run needs (section "Session.gate_report") and mul
 
 import argparse
 import cProfile
-import os
 import io
+import os
 import pstats
 import sys
 import time
@@ -46,15 +46,7 @@ def _init_worker(point: dict, single_thread: bool = True) -> None:
     _WORLD = _with_point(w, params.Schema.load(w.cfg["paths"]["params"], w.risk, w.analyst), point)
 
 
-def parse_set(items: list[str]) -> dict:
-    """--set key=value pairs (numbers) -> a partial parameter point."""
-    out = {}
-    for item in items:
-        key, _, raw = item.partition("=")
-        if not raw:
-            raise ValueError(f"--set expects key=value, got {item!r}")
-        out[key] = int(raw) if raw.lstrip("-").isdigit() else float(raw)
-    return out
+parse_set = world.parse_set
 
 
 def _task(span: tuple[str, str]) -> tuple[int, float]:

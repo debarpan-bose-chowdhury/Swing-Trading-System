@@ -17,7 +17,8 @@ def check() -> int:
     """Config loads and validates, and the app side it builds on loads too. No network, no writes."""
     try:
         cfg = config.load()
-        from app.analyst import common as analyst_common, regime
+        from app.analyst import common as analyst_common
+        from app.analyst import regime
         app_cfg = analyst_common.load_config()
         regime.windows_of(app_cfg)
         if not cfg["tax"]["confirmed"]:
@@ -52,12 +53,12 @@ def write(cfg: dict, rep: dict, suffix: str = "") -> Path:
     return path
 
 
-def single(cfg: dict, start: str | None, end: str | None) -> Path:
+def single(cfg: dict, start: str | None, end: str | None, point: dict | None = None) -> Path:
     """One judge run over [start, end] with the config as it is, written to backtest/data/runs/. Returns the report path."""
-    return write(cfg, evaluate(cfg, world.World.build(cfg), start, end))
+    return write(cfg, evaluate(cfg, world.with_point(world.World.build(cfg), point or {}), start, end))
 
 
-def compare(cfg: dict, start: str | None, end: str | None) -> tuple[str, list[Path]]:
+def compare(cfg: dict, start: str | None, end: str | None, point: dict | None = None) -> tuple[str, list[Path]]:
     """Today's names versus the point-in-time universe, the latter at no write-off and at each universe.vanishHaircuts level."""
     if not cfg["universe"]["adjustValidated"]:
         raise prep.MissingInput("--compare needs universe.adjustValidated true (see --validate-adjust)")
@@ -67,7 +68,7 @@ def compare(cfg: dict, start: str | None, end: str | None) -> tuple[str, list[Pa
     for label, mode, h in cases:
         c = json.loads(json.dumps(cfg))
         c["universe"]["mode"] = mode
-        w = built.get(mode) or built.setdefault(mode, world.World.build(c))
+        w = built.get(mode) or built.setdefault(mode, world.with_point(world.World.build(c), point or {}))
         rep = evaluate(c, w, start, end, h)
         paths.append(write(c, rep, f"_{mode}" + (f"_h{int(h * 100)}" if mode == "pit" else "")))
         rows.append((f"{label} write-off {int(h * 100)}%" if mode == "pit" else "today's names", rep))
@@ -75,6 +76,9 @@ def compare(cfg: dict, start: str | None, end: str | None) -> tuple[str, list[Pa
     for name, r in rows:
         lines.append(f"{name:<28}{_fmt(r['objectives']['postTaxCagr']):>12}{_fmt(r['objectives']['maxDrawdown']):>9}{_fmt(r['postTax'].get('sharpe')):>8}"
                      f"{r['vanished']['exits']:>7}{r['vanished']['writtenOffInr']:>15,.0f}")
+    if any(r["trades"]["fills"] == 0 for _, r in rows):
+        lines.append("WARNING: a case made 0 fills. At Rs 1 lakh the live sizing minimums stop every order, so the figures above are cash. "
+                     "Re-run with e.g. --set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500")
     return "\n".join(lines), paths
 
 
@@ -87,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="validate config only (no network, no writes)")
     parser.add_argument("--single", action="store_true", help="one judge run; writes backtest/data/runs/run_*.json")
     parser.add_argument("--compare", action="store_true", help="today's names versus the point-in-time universe, with 0% / 50% / 100% write-off of vanished names")
+    parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                        help="parameter from params.json, e.g. --set sizing.minNewOrderInr=3000 (repeatable); the live config at Rs 1 lakh cannot trade")
     parser.add_argument("--start", help="first simulated day (default: window.start, else the first known regime)")
     parser.add_argument("--end", help="last simulated day (default: window.end, else the end of the data)")
     args = parser.parse_args(argv)
@@ -94,10 +100,10 @@ def main(argv: list[str] | None = None) -> int:
         return check()
     try:
         if args.compare:
-            table, paths = compare(config.load(), args.start, args.end)
+            table, paths = compare(config.load(), args.start, args.end, world.parse_set(args.set))
             print(table + "\n" + "\n".join(f"run: wrote {p}" for p in paths))
             return 0
-        print(f"run: wrote {single(config.load(), args.start, args.end)}")
+        print(f"run: wrote {single(config.load(), args.start, args.end, world.parse_set(args.set))}")
         return 0
     except prep.MissingInput as e:
         print(f"run: {e}", file=sys.stderr)
