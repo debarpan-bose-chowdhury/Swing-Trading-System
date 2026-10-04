@@ -151,3 +151,20 @@ Needs your PC (no `app/data/` in the cloud): golden file for a fixed 2-year run,
 - The tax table must be verified by you before `tax.confirmed` is trusted (set true in the shipped config).
 - Remaining universe bias: holes in the top 150, names with unresolved splits, no dividends on derived names, merger consideration modelled only as exit at the last price.
 - Not built: screener tier, optimiser/HPO runner, bhavcopy gap fill of missing Yahoo days, golden-file test.
+
+## First full-history results (2008-07-25 to 2026-10-01, Rs 1 lakh, sizing minimums 3,000 / 1,500, owner restart after 126 sessions)
+
+Recorded so the next reader knows what the engine produced before any tuning. Tax schedule confirmed, charges at current rates, surveillance not modelled. Not a recommendation: the parameters are the live defaults with only the two sizing minimums lowered so a Rs 1 lakh account can trade.
+
+| | Today's names | Point-in-time |
+|---|---|---|
+| Post-tax CAGR | -0.8% | -3.7% |
+| Max drawdown (post-tax) | -38.3% | -53.3% |
+| Sharpe | -0.69 | -1.39 |
+| Fills / turnover | 2,350 / 70.7x | 1,182 / 38.6x |
+| Time in market | 86% | 67% |
+| Charges / average NAV (whole run) | 0.72 | 0.45 |
+| Ladder restarts | 2012-11-26 | 2010-10-21, 2019-04-12 |
+| Names later stopped / write-off exits | 0 / 0 | 0 / 0 (write-off 50% and 100% identical to 0%) |
+
+Benchmark (Nifty price index): +9.8% CAGR, max drawdown -45.4%, Sharpe 0.29. Readings: (1) the live rules at these settings do not beat the index over this window; (2) the point-in-time universe costs about 3 points of CAGR against today's names, an estimate of the survivorship bias in a losing strategy, with the residual-bias caveats above; (3) charges are the main leak at this account size (about Rs 27 per fill against positions of a few thousand rupees), which the sizing minimums should be tuned against; (4) the 2008 start (a 21% realised loss in the first FY) triggers the flat-lock in every run.

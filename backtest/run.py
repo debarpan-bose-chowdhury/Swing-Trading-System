@@ -45,8 +45,17 @@ def evaluate(cfg: dict, w: world.World, start: str | None, end: str | None, hair
     taxes = tax.assess(pieces, cfg["tax"]["schedule"])
     post = tax.post_tax_curve(result.nav, taxes)
     meta = {"configHash": world.config_hash(cfg, w.risk, w.analyst), "dataHash": w.data.data_hash(), "codeSha": world.code_sha(),
-            "entryViewMismatch": tax.entry_view_mismatch(pieces), "missingHistory": w.data.missing()}
+            "entryViewMismatch": tax.entry_view_mismatch(pieces), "missingHistory": w.data.missing(),
+            "tradedNames": _traded_names(w.data, result.fills)}
     return report.build(result, taxes, post, w.risk, cfg, bool(cfg["surv"]["proxy"]), meta)
+
+
+def _traded_names(data, fills) -> dict:
+    """How many names the run traded and how many of them later stopped trading (the only ones a write-off can touch)."""
+    traded = sorted(set(fills.ticker)) if len(fills) else []
+    end = data.index.Date.iloc[-1]
+    stopped = [t for t in traded if (data.last_date(t) or "9999-12-31") < end]
+    return {"count": len(traded), "laterStoppedTrading": len(stopped), "examples": stopped[:10]}
 
 
 def write(cfg: dict, rep: dict, suffix: str = "") -> Path:
@@ -121,10 +130,10 @@ def compare(cfg: dict, start: str | None, end: str | None, point: dict | None = 
                 got[label] = (rep, path)
     rows = [(label, got[label][0]) for label, _, _ in cases]
     paths = [got[label][1] for label, _, _ in cases]
-    lines = [f"{'universe':<28}{'postTaxCagr':>12}{'maxDD':>9}{'sharpe':>8}{'exits':>7}{'writtenOffInr':>15}{'restarts':>9}"]
+    lines = [f"{'universe':<28}{'postTaxCagr':>12}{'maxDD':>9}{'sharpe':>8}{'exits':>7}{'writtenOffInr':>15}{'restarts':>9}{'traded':>8}{'dead':>6}"]
     for name, r in rows:
         lines.append(f"{name:<28}{_fmt(r['objectives']['postTaxCagr']):>12}{_fmt(r['objectives']['maxDrawdown']):>9}{_fmt(r['postTax'].get('sharpe')):>8}"
-                     f"{r['vanished']['exits']:>7}{r['vanished']['writtenOffInr']:>15,.0f}{len(r['ladder']['restarts']):>9}")
+                     f"{r['vanished']['exits']:>7}{r['vanished']['writtenOffInr']:>15,.0f}{len(r['ladder']['restarts']):>9}{r['tradedNames']['count']:>8}{r['tradedNames']['laterStoppedTrading']:>6}")
     if any(r["trades"]["fills"] == 0 for _, r in rows):
         lines.append("WARNING: a case made 0 fills. At Rs 1 lakh the live sizing minimums stop every order, so the figures above are cash. "
                      "Re-run with e.g. --set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500")

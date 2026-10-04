@@ -199,6 +199,7 @@ class SingleRun(World):
     def test_the_report_counts_vanished_names(self):
         rep = json.loads(run.single(self.bt, self.days[400], self.days[560]).read_text())
         self.assertEqual(set(rep["vanished"]), {"exits", "haircut", "writtenOffInr", "examples"})
+        self.assertEqual(set(rep["tradedNames"]), {"count", "laterStoppedTrading", "examples"})
 
     def test_composition_mismatch_is_refused(self):
         self.bt["capital"]["composition"] = {"LargeCap": 1.0, "MidCap": 0.0, "SmallCap": 0.0}
