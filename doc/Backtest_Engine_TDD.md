@@ -114,6 +114,7 @@ Run from the repo root, `--check` first, exit codes 0 ok, 1 failed, 2 busy, 3 ga
 | `backtest.run --check` | validate config and the app side; no network, no writes |
 | `backtest.run --single [--start --end --set K=V]` | one judge run; writes `backtest/data/runs/run_*.json` |
 | `backtest.run --compare [--start --end --set K=V --workers N --no-auto-restart]` | today's names vs point-in-time at 0% / 50% / 100% write-off; prints post-tax CAGR, max drawdown, Sharpe, exits, rupees written off; one report per case. The four cases run in parallel processes (default `compute.workers`, one native thread each); each prints a progress line per 5% with the simulated date, elapsed time and ETA. `--single` prints the same |
+| `backtest.parity --check`, `--targets [--recent N --spread K]`, `--signals` | Read-only parity with the live app on your data (below) |
 | `backtest.prep --check`, `--dividends`, `--scan` | data readiness, Yahoo dividends and splits, calendar and anomaly report |
 | `backtest.surv_proxy --snapshot`, `--calibrate` | keep the app's surveillance lists; score proxy thresholds |
 | `backtest.bench [--years --profile --workers --scaling --set K=V]` | runtime spike |
@@ -141,6 +142,8 @@ Offline and synthetic; no network. `tests/app` (root project, `uv run pytest`, c
 | Universe | split detector, links, membership labels independent of later data, pit equals static buckets |
 | Vanished names | exit date and price, exact write-off, nothing changes before the exit |
 | Security | file loaders go through the app's `safe_path` (paths must stay inside the working directory) |
+
+`backtest.parity` (run on your PC, writes only `backtest/data/parity/report.json`): `--targets` runs the app's own `app.analyst.signals --as-of` logic (read-only, in process) for the newest N and K evenly spaced older rebalance dates and requires the backtest's targets to equal it (regime, composition, picks, ranks and numbers); recent dates share the live universe, older ones can differ legitimately because the app replays with today's bucket files and its data-quality gates, and a date the app refuses is listed as LIVE_REFUSED, not as a mismatch. It also compares every stored `targets_<date>.json` (picks and regime exact, numbers within 2% because adjusted closes are revised). `--signals` checks every stored `signals_<asOf>.json` for regime, weekly flag against the rebalance rule, execution date and exposure caps against `risk.json`; the book, NAV, ladder state and actions depend on your real account and are not compared. Exit 0 no mismatch, 1 mismatch or failure, 3 inputs missing.
 
 Needs your PC (no `app/data/` in the cloud): golden file for a fixed 2-year run, calendar check against real holidays, real-date targets parity.
 
