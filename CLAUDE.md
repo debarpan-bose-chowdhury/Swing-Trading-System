@@ -2,7 +2,7 @@
 
 Batch-job pipeline for NSE data, signals and risk checks. Python 3.12, managed with `uv`. No database,
 no server (except an optional stdlib HTTPS `/health`). Data is flat files under `app/data/` (git-ignored).
-Full setup: `app/doc/LOCAL_SETUP.md`.
+Full setup: `doc/LOCAL_SETUP.md`.
 
 ## Rules
 - Run everything from the repo root (config/data paths are relative) with the venv active or via `uv run`.
@@ -17,6 +17,11 @@ Full setup: `app/doc/LOCAL_SETUP.md`.
 - One-time: `app.market.migrator` (slow, resumable). Quarterly: `app.market.archiver`, `app.metadata.cleaner`
 - Optional: `app.analyst.ledger` (needs `ANGEL_*`), probes `app.analyst.probe --check-broker`, `app.risk.probe --check-nse`
 - Replay: `app.analyst.signals --as-of YYYY-MM-DD` (read-only)
+
+## Backtest (sibling `backtest/`, personal use, in progress)
+- Design: `doc/Backtest_Engine_TDD.md`; history: `doc/Backtest_Implementation_Plan.md`. Check: `uv run --project backtest python -m backtest.run --check`. Tests: `uv run --project backtest pytest -c backtest/pyproject.toml`.
+- Stages: `backtest.prep --check|--dividends|--scan`, `backtest.run --single|--compare [--set KEY=VALUE]` (--set applies params.json values, e.g. `--set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500`; at Rs 1 lakh the live sizing makes 0 trades) (`--no-auto-restart` keeps the live ladder: a flat-lock is never restarted; by default `ladder.autoRestart` in backtest.json simulates the owner's manual restart) (--compare [--workers N]: runs its 4 cases in parallel processes with a progress line per 5% and an ETA; today's names vs point-in-time, with 0/50/100% write-off of names that stop trading), `backtest.parity --check|--targets|--signals` (read-only parity of the backtest with the live app on your data: targets vs `app.analyst.signals --as-of` and stored live files; stored live signals vs the backtest's regime/rebalance rule/caps), `backtest.surv_proxy --snapshot|--calibrate`, `backtest.bench [--years N --profile --workers K]` (runtime spike), `backtest.bhav --check|--probe|--download|--build|--crosscheck|--summary|--universe-stats` (NSE bhavcopy; needs a passed `--probe` on a machine that can reach NSE). `backtest.universe --links|--probe-symbolchange|--validate-adjust|--tune-adjust|--build-pit` (point-in-time universe groundwork). Parameter bounds: `backtest/config/params.json` (unconfirmed until you set `confirmed`).
+- Reads `app/` and `app/data/` only; never writes them. Not copied into any Docker image.
 
 ## Exit codes
 0 ok, 1 failed, 2 busy (run lock), 3 gate not met (run the upstream stage first).

@@ -10,3 +10,6 @@ app/data/
 
 .env
 *.env
+
+# backtest
+backtest/data/

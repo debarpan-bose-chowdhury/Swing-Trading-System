@@ -1,0 +1,68 @@
+{
+  "window": { "start": null, "end": null, "holdoutYears": 2 },
+  "broker": { "profile": "angelone", "chargesFrom": "app/config/analyst.json" },
+  "capital": { "inr": 100000, "composition": { "LargeCap": 0.5, "MidCap": 0.3, "SmallCap": 0.2 } },
+  "fill": {
+    "mode": "open",
+    "realism": { "bands": false, "volumeCap": false, "circuitLocks": false, "settlementLag": false },
+    "carryOverDays": 7
+  },
+  "tax": { "schedule": [
+    { "from": "2008-04-01", "stcgPct": 0.15, "ltcgPct": 0.0, "ltcgExemptionInr": 0, "cessPct": 0.03 },
+    { "from": "2018-04-01", "stcgPct": 0.15, "ltcgPct": 0.10, "ltcgExemptionInr": 100000, "cessPct": 0.04 },
+    { "from": "2024-07-23", "stcgPct": 0.20, "ltcgPct": 0.125, "ltcgExemptionInr": 125000, "cessPct": 0.04 }
+  ], "confirmed": true },
+  "ladder": { "autoRestart": { "enabled": true, "afterSessions": 126 } },
+  "walkforward": { "type": "rolling", "trainYears": 5, "testYears": 1, "stepYears": 1, "purgeDays": 168 },
+  "gate": { "pboMax": 0.20, "dsrMin": 0.95, "oosIsMin": 0.6, "neighbourhoodShare": 0.8, "neighbourhoodTolerance": 0.20 },
+  "stress": {
+    "2008 crisis": [["2008-09-01", "2009-03-31"]],
+    "2013 taper and 2015-16": [["2013-05-22", "2013-09-30"], ["2015-08-01", "2016-02-29"]],
+    "2020 COVID": [["2020-02-01", "2020-12-31"]],
+    "2022 hikes and 2024 election": [["2022-01-01", "2022-12-31"], ["2024-06-03", "2024-06-10"]]
+  },
+  "surv": {
+    "proxy": false,
+    "circuit": { "movePct": null, "rangePct": null, "window": null, "minHits": null },
+    "thin": { "window": null, "minValueInr": null }
+  },
+  "overrides": { "risk": {}, "analyst": {} },
+  "prep": { "dividendsFrom": "2007-01-01", "bigMovePct": 0.25, "dividendStepMin": 0.002, "dividendTolerance": 0.05 },
+  "bhav": {
+    "note": "URL templates and column names are from the TDD and memory, UNVERIFIED. `python -m backtest.bhav --probe` downloads one file of each format on your PC and checks them; --download refuses until both probes pass.",
+    "from": "2007-09-17",
+    "seriesKeep": ["EQ", "BE", "BZ"],
+    "probeDays": { "legacy": ["2007-09-17", "2008-01-02", "2015-06-02", "2024-07-05"], "udiff": ["2024-07-09", "2026-09-30"] },
+    "client": { "homeUrl": "https://www.nseindia.com", "maxRetries": 3, "backoffSeconds": [2, 4, 8], "gapSeconds": 1.0, "abortAfterFailures": 10 },
+    "crosscheck": { "closeTolerance": 0.005, "volumeTolerance": 0.10 },
+    "formats": {
+      "legacy": {
+        "until": "2024-07-05",
+        "url": "https://nsearchives.nseindia.com/content/historical/EQUITIES/{yyyy}/{MON}/cm{dd}{MON}{yyyy}bhav.csv.zip",
+        "dateColumn": "TIMESTAMP", "dateFormat": "%d-%b-%Y",
+        "columns": { "symbol": "SYMBOL", "series": "SERIES", "open": "OPEN", "high": "HIGH", "low": "LOW", "close": "CLOSE", "prevClose": "PREVCLOSE", "volume": "TOTTRDQTY", "value": "TOTTRDVAL", "isin": "ISIN" }
+      },
+      "udiff": {
+        "from": "2024-07-08",
+        "url": "https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_{yyyymmdd}_F_0000.csv.zip",
+        "dateColumn": "TradDt", "dateFormat": "%Y-%m-%d",
+        "columns": { "symbol": "TckrSymb", "series": "SctySrs", "open": "OpnPric", "high": "HghPric", "low": "LwPric", "close": "ClsPric", "prevClose": "PrvsClsgPric", "volume": "TtlTradgVol", "value": "TtlTrfVal", "isin": "ISIN" }
+      }
+    }
+  },
+  "universe": {
+    "mode": "today",
+    "adjustValidated": true,
+    "rankWindow": 120,
+    "rankMinObs": 60,
+    "scopeTop": 250,
+    "symbolMap": "backtest/config/symbol_map.csv",
+    "excludePattern": "-RE\\d*$",
+    "symbolChange": { "url": "https://nsearchives.nseindia.com/content/equities/symbolchange.csv",
+                      "layout": { "fromEnd": { "old": 3, "new": 2, "date": 1 }, "dateFormat": "%d-%b-%Y" } },
+    "adjust": { "minMove": 0.30, "niceTolerance": 0.10, "volumeWindow": 10, "volumeTolerance": 0.80, "minPost": 5, "tightTolerance": 0.10, "crashSpike": 4.0 },
+    "vanishHaircuts": [0.5, 1.0]
+  },
+  "compute": { "workers": 8, "seed": 1 },
+  "paths": { "data": "backtest/data", "appConfig": "app/config", "appData": "app/data", "params": "backtest/config/params.json" }
+}

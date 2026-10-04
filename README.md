@@ -150,7 +150,7 @@ four months selected). The 2nd never coincides with the upstream Cleaner on the 
 
 ### Stock Analyst (weekly targets)
 
-Design: `app/doc/Stock_Analyst_TDD.md` (read its "As-built decisions" first). It reads the Ticker Data prices, the
+Design: `doc/Stock_Analyst_TDD.md` (read its "As-built decisions" first). It reads the Ticker Data prices, the
 Metadata bucket files and the Ledger's book, and writes `app/data/analyst/targets/targets_{rebalance_date}.json` for the
 Risk Manager. It places no orders. Stages: Ledger (broker -> fills, book, journal), Signals (targets) and the broker Probe.
 
@@ -195,7 +195,7 @@ The backups sit on the same disk as the data: also back up the host folder elsew
 
 ### Risk Manager (daily and weekly signals)
 
-Design: `app/doc/Risk_Manager_TDD.md` (read its "As-built decisions" first). It turns the Analyst's weekly target list and the
+Design: `doc/Risk_Manager_TDD.md` (read its "As-built decisions" first). It turns the Analyst's weekly target list and the
 Ledger's book into `app/data/risk/signals/signals_{asOf}.json`: what to buy or sell, how many shares and why. It keeps the account
 inside the limits in `risk.json` and measures how the strategy is doing. **Signals only**: it places no orders, has no order,
 GTT or broker call and holds no Angel One secret. Four blocks share the code: Sizer (weekly quantities, risk-based and capped),
@@ -260,6 +260,27 @@ fill `surveillance.sources` (`url`, `format`, `symbolColumn`, `valueColumn`, opt
 the holidays in `nse_calendar.json`; finish the Ledger go-live checklist; back up the host folder (the 30-day backups share its disk).
 Until the sources are filled Surveillance exits 1 and Run blocks every buy as `NO_SURVEILLANCE_DATA`; exits keep working.
 
+### Backtest (personal use, sibling `backtest/`)
+
+Replays the Risk Manager's own `decide()` over NSE history with next-open fills, dividends, a FIFO tax overlay, walk-forward
+windows with a locked holdout, and an overfitting gate. It reads `app/` and `app/data/` and writes only `backtest/data/`
+(git-ignored); it never places orders and is not copied into any image. Design: `doc/Backtest_Engine_TDD.md`; decision
+history and measured results: `doc/Backtest_Implementation_Plan.md`.
+
+```
+uv run --project backtest python -m backtest.run --check          # config + app side, no network, no writes
+uv run --project backtest python -m backtest.prep --check         # is the data ready
+uv run --project backtest python -m backtest.prep --dividends     # Yahoo dividends and splits (network)
+uv run --project backtest python -m backtest.run --single --set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500   # one judge run (Rs 1 lakh needs lower sizing minimums to trade) -> backtest/data/runs/run_*.json
+uv run --project backtest python -m backtest.run --compare --set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500   # today's names vs point-in-time, 0/50/100% write-off of vanished names
+uv run --project backtest pytest -c backtest/pyproject.toml       # offline tests
+```
+
+Point-in-time universe (needs a machine that can reach NSE): `backtest.bhav --probe`, `--download`, `--build`, then
+`backtest.universe --links`, `--validate-adjust`, `--tune-adjust`, `--build-pit`; set `universe.mode` to `pit` once
+`universe.adjustValidated` is true. Before relying on a result, confirm `backtest/config/params.json` (`confirmed`) and the tax
+table (`tax.confirmed`). Results are labelled in every report (surveillance not modelled, current-rate charges, universe bias).
+
 ## Container
 
 `Dockerfile` builds the HTTPS service image; `Dockerfile.market` builds the Ticker Data System image (adds
@@ -298,7 +319,9 @@ retries.
 - `app/risk/`: Risk Manager (`surveillance`, `run`, `evaluate`, `probe`; `sizer`, `monitor`, `stops`, `ladder`, `nav`, `shadow`, `evaluator`, `tax`, `surveil`, shared `common`).
 - `app/config/`: `config.json` (metadata pipeline), `market.json`, `indices.json`, `nse_calendar.json` (market stages), `analyst.json`, `seed_positions.csv` (analyst), `risk.json`, `cash_flows.csv` (risk).
 - `app/data/`: pipeline output (`raw/`, `storage/`, `market/`, `logs/`, `health.json`); git-ignored.
-- `tests/`: unit tests for the HTTP service, the metadata pipeline, the market stages, the Analyst and the Risk Manager (Yahoo, NSE and the broker are always faked).
+- `backtest/`: backtest engine (sibling project with its own `pyproject.toml`; config in `backtest/config/`, output in `backtest/data/`, git-ignored).
+- `tests/app/`: unit tests for the HTTP service, the metadata pipeline, the market stages, the Analyst and the Risk Manager (Yahoo, NSE and the broker are always faked).
+- `tests/backtest/`: offline tests for the sibling `backtest/` package (run with its own project, see CLAUDE.md).
 
 ## CI/CD
 
