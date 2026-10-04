@@ -110,7 +110,7 @@ Run from the repo root, `--check` first, exit codes 0 ok, 1 failed, 2 busy, 3 ga
 |---|---|
 | `backtest.run --check` | validate config and the app side; no network, no writes |
 | `backtest.run --single [--start --end --set K=V]` | one judge run; writes `backtest/data/runs/run_*.json` |
-| `backtest.run --compare [--start --end --set K=V]` | today's names vs point-in-time at 0% / 50% / 100% write-off; prints post-tax CAGR, max drawdown, Sharpe, exits, rupees written off; one report per case |
+| `backtest.run --compare [--start --end --set K=V --workers N]` | today's names vs point-in-time at 0% / 50% / 100% write-off; prints post-tax CAGR, max drawdown, Sharpe, exits, rupees written off; one report per case. The four cases run in parallel processes (default `compute.workers`, one native thread each); each prints a progress line per 5% with the simulated date, elapsed time and ETA. `--single` prints the same |
 | `backtest.prep --check`, `--dividends`, `--scan` | data readiness, Yahoo dividends and splits, calendar and anomaly report |
 | `backtest.surv_proxy --snapshot`, `--calibrate` | keep the app's surveillance lists; score proxy thresholds |
 | `backtest.bench [--years --profile --workers --scaling --set K=V]` | runtime spike |

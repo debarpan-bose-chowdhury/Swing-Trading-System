@@ -7,10 +7,12 @@ Exit codes as in the app: 0 ok, 1 failed, 2 busy, 3 gate not met (run the upstre
 import argparse
 import json
 import sys
+import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from app.market.common import atomic
-from backtest import config, prep, replay, report, tax, world
+from backtest import config, prep, replay, report, tax, workers, world
 
 
 def check() -> int:
@@ -31,12 +33,12 @@ def check() -> int:
     return 0
 
 
-def evaluate(cfg: dict, w: world.World, start: str | None, end: str | None, haircut: float = 0.0) -> dict:
+def evaluate(cfg: dict, w: world.World, start: str | None, end: str | None, haircut: float = 0.0, progress=None) -> dict:
     """One judge run on a built world; returns the report. haircut: the write-off on a position whose ticker stopped trading."""
     start = start or cfg["window"]["start"] or w.first_known_regime()
     end = end or cfg["window"]["end"]
     result = replay.simulate(w.data, w.targets, w.risk, start, end, cfg["capital"]["inr"], w.surveillance, carry_over_days=cfg["fill"]["carryOverDays"],
-                             dividends=w.dividends, vanish_haircut=haircut)
+                             dividends=w.dividends, vanish_haircut=haircut, progress=progress)
     if result.nav.empty:
         raise ValueError(f"no simulated days between {start} and {end}")
     pieces = tax.lots(result.fills)
@@ -55,23 +57,70 @@ def write(cfg: dict, rep: dict, suffix: str = "") -> Path:
 
 def single(cfg: dict, start: str | None, end: str | None, point: dict | None = None) -> Path:
     """One judge run over [start, end] with the config as it is, written to backtest/data/runs/. Returns the report path."""
-    return write(cfg, evaluate(cfg, world.with_point(world.World.build(cfg), point or {}), start, end))
+    return write(cfg, evaluate(cfg, world.with_point(world.World.build(cfg), point or {}), start, end, progress=_progress("single")))
 
 
-def compare(cfg: dict, start: str | None, end: str | None, point: dict | None = None) -> tuple[str, list[Path]]:
-    """Today's names versus the point-in-time universe, the latter at no write-off and at each universe.vanishHaircuts level."""
+def _clock(seconds: float) -> str:
+    m, sec = divmod(int(seconds), 60)
+    return f"{m // 60}:{m % 60:02d}:{sec:02d}"
+
+
+def _progress(label: str):
+    """A replay.simulate progress callback: one line per 5% with the simulated date, elapsed time and an ETA."""
+    t0, last = time.perf_counter(), [-1]
+
+    def show(done: int, total: int, asof: str) -> None:
+        pct = done * 100 // total
+        if pct == last[0] or (pct % 5 and done != total):
+            return
+        last[0] = pct
+        elapsed = time.perf_counter() - t0
+        print(f"[{label}] {pct:3d}%  {asof}  elapsed {_clock(elapsed)}  eta {_clock(elapsed * (total - done) / done)}", flush=True)
+    return show
+
+
+_BUILT: dict[str, world.World] = {}  # per process: the worlds already built, keyed by universe mode
+
+
+def _run_case(job: tuple) -> tuple[str, dict, Path]:
+    cfg, point, start, end, label, mode, haircut = job
+    cfg = json.loads(json.dumps(cfg))
+    cfg["universe"]["mode"] = mode
+    if mode not in _BUILT:
+        t0 = time.perf_counter()
+        print(f"[{label}] building the {mode} world ...", flush=True)
+        _BUILT[mode] = world.with_point(world.World.build(cfg), point)
+        print(f"[{label}] world ready in {_clock(time.perf_counter() - t0)}", flush=True)
+    rep = evaluate(cfg, _BUILT[mode], start, end, haircut, _progress(label))
+    path = write(cfg, rep, f"_{mode}" + (f"_h{int(haircut * 100)}" if mode == "pit" else ""))
+    print(f"[{label}] done -> {path.name}", flush=True)
+    return label, rep, path
+
+
+def compare(cfg: dict, start: str | None, end: str | None, point: dict | None = None, workers_n: int | None = None) -> tuple[str, list[Path]]:
+    """Today's names versus the point-in-time universe, the latter at no write-off and at each universe.vanishHaircuts level.
+
+    The cases run in parallel processes (one native thread each) when workers_n > 1; every case prints a progress line per 5%.
+    """
     if not cfg["universe"]["adjustValidated"]:
         raise prep.MissingInput("--compare needs universe.adjustValidated true (see --validate-adjust)")
-    cases = [("today", "today", 0.0)] + [("pit", "pit", h) for h in [0.0, *cfg["universe"]["vanishHaircuts"]]]
-    rows, paths = [], []
-    built: dict[str, world.World] = {}
-    for label, mode, h in cases:
-        c = json.loads(json.dumps(cfg))
-        c["universe"]["mode"] = mode
-        w = built.get(mode) or built.setdefault(mode, world.with_point(world.World.build(c), point or {}))
-        rep = evaluate(c, w, start, end, h)
-        paths.append(write(c, rep, f"_{mode}" + (f"_h{int(h * 100)}" if mode == "pit" else "")))
-        rows.append((f"{label} write-off {int(h * 100)}%" if mode == "pit" else "today's names", rep))
+    cases = [("today's names", "today", 0.0)] + [(f"pit write-off {int(h * 100)}%", "pit", h) for h in [0.0, *cfg["universe"]["vanishHaircuts"]]]
+    jobs = [(cfg, point or {}, start, end, label, mode, h) for label, mode, h in cases]
+    n = min(workers_n or cfg["compute"]["workers"], len(jobs))
+    print(f"compare: {len(jobs)} cases on {n} process(es); a progress line is printed per 5% of each case", flush=True)
+    got: dict[str, tuple[dict, Path]] = {}
+    if n <= 1:
+        for job in jobs:
+            label, rep, path = _run_case(job)
+            got[label] = (rep, path)
+    else:
+        workers.limit_threads()
+        with ProcessPoolExecutor(n, initializer=workers.init_worker) as pool:
+            for fut in as_completed([pool.submit(_run_case, job) for job in jobs]):
+                label, rep, path = fut.result()
+                got[label] = (rep, path)
+    rows = [(label, got[label][0]) for label, _, _ in cases]
+    paths = [got[label][1] for label, _, _ in cases]
     lines = [f"{'universe':<28}{'postTaxCagr':>12}{'maxDD':>9}{'sharpe':>8}{'exits':>7}{'writtenOffInr':>15}"]
     for name, r in rows:
         lines.append(f"{name:<28}{_fmt(r['objectives']['postTaxCagr']):>12}{_fmt(r['objectives']['maxDrawdown']):>9}{_fmt(r['postTax'].get('sharpe')):>8}"
@@ -93,6 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--compare", action="store_true", help="today's names versus the point-in-time universe, with 0% / 50% / 100% write-off of vanished names")
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                         help="parameter from params.json, e.g. --set sizing.minNewOrderInr=3000 (repeatable); the live config at Rs 1 lakh cannot trade")
+    parser.add_argument("--workers", type=int, help="--compare: parallel processes (default compute.workers in backtest.json, at most one per case; 1 = one after another)")
     parser.add_argument("--start", help="first simulated day (default: window.start, else the first known regime)")
     parser.add_argument("--end", help="last simulated day (default: window.end, else the end of the data)")
     args = parser.parse_args(argv)
@@ -100,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
         return check()
     try:
         if args.compare:
-            table, paths = compare(config.load(), args.start, args.end, world.parse_set(args.set))
+            table, paths = compare(config.load(), args.start, args.end, world.parse_set(args.set), args.workers)
             print(table + "\n" + "\n".join(f"run: wrote {p}" for p in paths))
             return 0
         print(f"run: wrote {single(config.load(), args.start, args.end, world.parse_set(args.set))}")

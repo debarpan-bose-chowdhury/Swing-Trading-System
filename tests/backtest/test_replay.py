@@ -168,3 +168,26 @@ class VanishedNames(Replay):
 
     def test_nothing_vanishes_in_the_untouched_world(self):
         self.assertEqual([v for v in self.sim().vanished if v["ticker"] == self.ticker], [])
+
+
+class Progress(Replay):
+    def test_progress_is_reported_about_once_per_percent_and_ends_at_the_last_day(self):
+        calls = []
+        r = self.sim(progress=lambda done, total, asof: calls.append((done, total, asof)))
+        total = len(r.nav)
+        self.assertEqual(calls[-1], (total, total, self.end))
+        self.assertEqual([c[0] for c in calls], sorted({c[0] for c in calls}))
+        self.assertLessEqual(len(calls), total)  # 161 days is under 200, so every day reports; a longer run reports every len//100 days
+
+    def test_the_cli_prints_a_line_per_five_percent_with_an_eta(self):
+        import contextlib
+        import io
+
+        from backtest import run
+        show, out = run._progress("case"), io.StringIO()
+        with contextlib.redirect_stdout(out):
+            for done in range(1, 201):
+                show(done, 200, "2020-01-01")
+        lines = out.getvalue().splitlines()
+        self.assertEqual(len(lines), 21)  # 0% is never printed; 5%, 10% ... 100%
+        self.assertTrue(lines[-1].startswith("[case] 100%") and "eta 0:00:00" in lines[-1])

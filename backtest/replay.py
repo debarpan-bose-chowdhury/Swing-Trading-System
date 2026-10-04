@@ -76,13 +76,14 @@ class Result:
 
 def simulate(data: PitData, targets: Targets, risk_cfg: dict, start: str, end: str | None = None, capital: float = 100000.0,
              surveillance=no_surveillance, keep_signals: bool = False, carry_over_days: int = 7, reference_dir: Path | None = None,
-             dividends=None, vanish_haircut: float = 0.0) -> Result:
+             dividends=None, vanish_haircut: float = 0.0, progress=None) -> Result:
     """Replay every index trading day from start to end (inclusive) and return the NAV rows, fills and counters.
 
     reference_dir: run decide() through the app's real files and commit() in that folder instead of the in-memory readers. It is
     the slow reference the decision-parity test compares with; production runs leave it None.
     vanish_haircut: a held ticker whose series has ended is closed on the first session after its last row at that row's Close less this
     share (0 = at the last price, 1 = a total loss); Result.vanished lists the exits.
+    progress: optional callable(done, total, asof) called about once per percent of the days.
     """
     cal = Calendar(risk_cfg["paths"]["calendar"])
     if risk_cfg["buckets"] != list(targets.names):
@@ -94,7 +95,8 @@ def simulate(data: PitData, targets: Targets, risk_cfg: dict, start: str, end: s
     newest, last_good = None, None
     days = [d for d in data.index.Date if d >= start and (end is None or d <= end)]
     with in_memory(mem) if reference_dir is None else nullcontext():
-        for asof in days:
+        step = max(1, len(days) // 100)
+        for n, asof in enumerate(days, 1):
             store.asof = asof
             if dividends is not None:
                 result.dividends += dividends.credit(book, asof)
@@ -121,6 +123,8 @@ def simulate(data: PitData, targets: Targets, risk_cfg: dict, start: str, end: s
             sig = out["signal"]
             queue.append({"asOf": asof, "executionDate": sig["executionDate"], "actions": sig["actions"]})
             last_good = asof
+            if progress and (n % step == 0 or n == len(days)):
+                progress(n, len(days), asof)
             result.warnings.update(set(fill_warnings) | set(sig["warnings"]))
             if T:
                 result.targets[asof] = T
