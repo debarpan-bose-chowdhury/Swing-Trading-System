@@ -191,3 +191,41 @@ class Progress(Replay):
         lines = out.getvalue().splitlines()
         self.assertEqual(len(lines), 21)  # 0% is never printed; 5%, 10% ... 100%
         self.assertTrue(lines[-1].startswith("[case] 100%") and "eta 0:00:00" in lines[-1])
+
+
+class OwnerRestart(Replay):
+    """The live ladder stays flat-locked until a manual restartFrom; the backtest's owner restarts it by rule."""
+
+    def setUp(self):
+        super().setUp()
+        self.risk["ladder"]["levels"] = [{"drawdownPct": d, "maxInvestedPct": m} for d, m in ((0.004, 0.75), (0.008, 0.5), (0.012, 0.25), (0.016, 0.0))]
+        risk_common.validate(self.risk, "run")
+
+    def test_without_a_restart_nothing_trades_after_the_flat_lock_and_with_one_the_ladder_comes_back(self):
+        live = self.sim(keep_signals=True, end=None)
+        locked = [s["asOf"] for s in live.signals if s["ladder"]["flatLocked"]]
+        self.assertTrue(locked, "the tightened ladder must flat-lock in this world")
+        self.assertEqual(live.restarts, [])
+        after = live.fills[live.fills.trade_date > locked[0]]
+        self.assertTrue((after.side == "SELL").all())  # a locked ladder only sells
+        owner = self.sim(keep_signals=True, restart_after=20, end=None)
+        self.assertGreater((owner.fills[owner.fills.trade_date > locked[0]].side == "BUY").sum(), 0)  # and the restart lets it buy again
+        self.assertTrue(owner.restarts)
+        first = owner.restarts[0]
+        self.assertGreaterEqual(self.days.index(first) - self.days.index(locked[0]), 20)
+        flags = {s["asOf"]: s["ladder"]["flatLocked"] for s in owner.signals}
+        self.assertTrue(flags[first] is False)  # the restart takes effect on the day itself
+        self.assertEqual(owner.nav.iloc[:self.days.index(locked[0]) - self.days.index(self.start)].to_dict(),
+                         live.nav.iloc[:self.days.index(locked[0]) - self.days.index(self.start)].to_dict())  # nothing before the lock changes
+
+    def test_the_rule_waits_for_the_regime_to_recover(self):
+        from backtest.replay import _restart_due
+        cfg = self.risk
+        lad = {"flatLocked": True, "flatLockedSince": self.days[10]}
+        days = self.days
+        self.assertFalse(_restart_due(lad, days, days[20], 20, cfg, ["BULL", "TREND"]))        # too soon
+        self.assertFalse(_restart_due(lad, days, days[40], 20, cfg, ["BULL", "BEAR"]))        # regime not recovered
+        self.assertFalse(_restart_due(lad, days, days[40], 20, cfg, ["TREND"]))               # not enough weeks
+        self.assertTrue(_restart_due(lad, days, days[40], 20, cfg, ["WEAK", "BULL", "TREND"]))
+        self.assertFalse(_restart_due({"flatLocked": False, "flatLockedSince": None}, days, days[40], 20, cfg, ["BULL", "TREND"]))
+        self.assertFalse(_restart_due(None, days, days[40], 20, cfg, ["BULL", "TREND"]))

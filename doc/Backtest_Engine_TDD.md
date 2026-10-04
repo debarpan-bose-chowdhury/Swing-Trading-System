@@ -36,6 +36,7 @@ The backtest replays the live Risk Manager over history. A day loop calls the ap
 | `capital` | `inr` 100,000 and `composition` 50/30/20 (must equal the analyst composition) |
 | `fill` | `mode: open`, `carryOverDays` 7, `realism` flags (bands, volumeCap, circuitLocks, settlementLag) which must stay false in v1 |
 | `tax` | dated schedule (2008-04-01, 2018-04-01, 2024-07-23) and `confirmed` |
+| `ladder` | `autoRestart`: `enabled` true, `afterSessions` 126 (see The judge) |
 | `walkforward` | rolling 5y train / 1y test / 1y step, `purgeDays` 168 |
 | `gate` | PBO <= 0.20, deflated Sharpe >= 0.95, OOS/IS >= 0.6, 80% of neighbours within 20% |
 | `stress` | named windows (2008, 2013 and 2015-16, COVID, 2022 and 2024 election) |
@@ -75,6 +76,8 @@ The common start is fixed from the slowest SMA the bounds allow (index row `smaS
 
 **Vanished names.** A held ticker whose series has ended is sold on the first session after its last row at that row's Close times (1 - write-off), with no charges (`fills.vanish`). The exit is a SELL fill, so tax and reports treat it as a sale. The write-off is 0 by default; the sensitivities are 50% and 100% (`universe.vanishHaircuts`). Series cut by an unresolved split break lose early history but do not end, so they are not vanishers. A merger leaves through the same rule rather than being linked as a rename.
 
+**Flat-lock and the owner's restart.** The live ladder flat-locks at its last rung (25% drawdown here) and only unlocks when someone sets `ladder.restartFrom` in `risk.json`; a backtest has no such person, so one 25% drawdown in 2008 ended the first real runs (flat in cash for 14 years). With `ladder.autoRestart.enabled` the simulated owner restarts the ladder on the first day that is at least `afterSessions` sessions after the lock and on which the active regime has been in the ladder's `reRisk.regimes` (BULL/TREND) for `reRisk.consecutiveWeeks` weeks; the effect is the same as setting `restartFrom` to that day (`replay.simulate(restart_after=...)`, in-memory mode only). Reports list the restart days and say so in their labels; `--no-auto-restart` gives the live-faithful run. The rule is a modelling choice, not the live behaviour.
+
 **Account size.** A Rs 1 lakh account cannot trade under the live `risk.json` (the sizer's smallest position is below `minNewOrderInr` 25,000). Sizing minimums, name caps and risk per position are therefore tunable parameters; a plain `--single` or `--compare` run at the live config makes no trades (the CLI warns). Pass values from `params.json` with `--set`, e.g. `--set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500`. Report labels follow `universe.mode`.
 
 ## Tax overlay
@@ -110,7 +113,7 @@ Run from the repo root, `--check` first, exit codes 0 ok, 1 failed, 2 busy, 3 ga
 |---|---|
 | `backtest.run --check` | validate config and the app side; no network, no writes |
 | `backtest.run --single [--start --end --set K=V]` | one judge run; writes `backtest/data/runs/run_*.json` |
-| `backtest.run --compare [--start --end --set K=V --workers N]` | today's names vs point-in-time at 0% / 50% / 100% write-off; prints post-tax CAGR, max drawdown, Sharpe, exits, rupees written off; one report per case. The four cases run in parallel processes (default `compute.workers`, one native thread each); each prints a progress line per 5% with the simulated date, elapsed time and ETA. `--single` prints the same |
+| `backtest.run --compare [--start --end --set K=V --workers N --no-auto-restart]` | today's names vs point-in-time at 0% / 50% / 100% write-off; prints post-tax CAGR, max drawdown, Sharpe, exits, rupees written off; one report per case. The four cases run in parallel processes (default `compute.workers`, one native thread each); each prints a progress line per 5% with the simulated date, elapsed time and ETA. `--single` prints the same |
 | `backtest.prep --check`, `--dividends`, `--scan` | data readiness, Yahoo dividends and splits, calendar and anomaly report |
 | `backtest.surv_proxy --snapshot`, `--calibrate` | keep the app's surveillance lists; score proxy thresholds |
 | `backtest.bench [--years --profile --workers --scaling --set K=V]` | runtime spike |

@@ -12,6 +12,7 @@
     { "from": "2018-04-01", "stcgPct": 0.15, "ltcgPct": 0.10, "ltcgExemptionInr": 100000, "cessPct": 0.04 },
     { "from": "2024-07-23", "stcgPct": 0.20, "ltcgPct": 0.125, "ltcgExemptionInr": 125000, "cessPct": 0.04 }
   ], "confirmed": true },
+  "ladder": { "autoRestart": { "enabled": true, "afterSessions": 126 } },
   "walkforward": { "type": "rolling", "trainYears": 5, "testYears": 1, "stepYears": 1, "purgeDays": 168 },
   "gate": { "pboMax": 0.20, "dsrMin": 0.95, "oosIsMin": 0.6, "neighbourhoodShare": 0.8, "neighbourhoodTolerance": 0.20 },
   "stress": {

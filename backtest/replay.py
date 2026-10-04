@@ -10,6 +10,7 @@ tests/backtest/test_replay.py compares the result with a run through the app's r
 """
 
 import logging
+from bisect import bisect_left
 from collections import Counter
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
@@ -71,18 +72,33 @@ class Result:
     warnings: Counter = field(default_factory=Counter)
     targets: dict = field(default_factory=dict)  # rebalance date -> targets dict
     dividends: list[dict] = field(default_factory=list)
+    restarts: list[str] = field(default_factory=list)  # days the simulated owner restarted a flat-locked ladder
     vanished: list[dict] = field(default_factory=list)  # positions closed because the ticker stopped trading
+
+
+def _restart_due(lad: dict | None, days: list[str], asof: str, after: int, cfg: dict, history: list[str]) -> bool:
+    """A flat-locked ladder, at least `after` sessions since the lock, and the regime recovered (the ladder's own re-risk regimes)."""
+    if not lad or not lad.get("flatLocked") or not lad.get("flatLockedSince"):
+        return False
+    if bisect_left(days, asof) - bisect_left(days, lad["flatLockedSince"]) < after:
+        return False
+    rr = cfg["ladder"]["reRisk"]
+    return len(history) >= rr["consecutiveWeeks"] and all(r in rr["regimes"] for r in history[-rr["consecutiveWeeks"]:])
 
 
 def simulate(data: PitData, targets: Targets, risk_cfg: dict, start: str, end: str | None = None, capital: float = 100000.0,
              surveillance=no_surveillance, keep_signals: bool = False, carry_over_days: int = 7, reference_dir: Path | None = None,
-             dividends=None, vanish_haircut: float = 0.0, progress=None) -> Result:
+             dividends=None, vanish_haircut: float = 0.0, progress=None, restart_after: int | None = None) -> Result:
     """Replay every index trading day from start to end (inclusive) and return the NAV rows, fills and counters.
 
     reference_dir: run decide() through the app's real files and commit() in that folder instead of the in-memory readers. It is
     the slow reference the decision-parity test compares with; production runs leave it None.
     vanish_haircut: a held ticker whose series has ended is closed on the first session after its last row at that row's Close less this
     share (0 = at the last price, 1 = a total loss); Result.vanished lists the exits.
+    restart_after: the simulated owner's manual restart. The live ladder stays flat-locked until someone sets ladder.restartFrom in
+    risk.json, which no backtest day does. With this set, a flat-locked ladder is restarted on the first day that is at least this many
+    sessions after the lock and on which the active regime has been one of ladder.reRisk.regimes for ladder.reRisk.consecutiveWeeks
+    weeks (the same effect as setting restartFrom to that day). Result.restarts lists the days. None = the live behaviour.
     progress: optional callable(done, total, asof) called about once per percent of the days.
     """
     cal = Calendar(risk_cfg["paths"]["calendar"])
@@ -107,7 +123,11 @@ def simulate(data: PitData, targets: Targets, risk_cfg: dict, start: str, end: s
             rebalance = regime.live_rebalance_date(cal, d) == d
             T = targets.build(asof) if rebalance else None
             newest = T or newest
-            ctx = Context(risk_cfg, asof, cal, store, LOG, data.members(asof), last_good=last_good, surv=surveillance(asof), rebalance=rebalance, targets=T,
+            day_cfg = risk_cfg
+            if restart_after is not None and reference_dir is None and _restart_due(mem.state.get("ladder"), days, asof, restart_after, risk_cfg, targets.regimes(asof)[1]):
+                day_cfg = {**risk_cfg, "ladder": {**risk_cfg["ladder"], "restartFrom": asof}}
+                result.restarts.append(asof)
+            ctx = Context(day_cfg, asof, cal, store, LOG, data.members(asof), last_good=last_good, surv=surveillance(asof), rebalance=rebalance, targets=T,
                           windows={b: e["strategy"]["stock_trend_ma"] for b, e in newest["buckets"].items() if e.get("strategy")} if newest else {})
             now = datetime(d.year, d.month, d.day, 21, 0, tzinfo=IST)
             if reference_dir is None:

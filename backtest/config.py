@@ -39,6 +39,9 @@ def validate(cfg: dict) -> None:
         raise ValueError("tax.schedule: rows with ascending, unique ISO 'from' dates")
     if not all(_num(r[k]) for r in sched for k in ("stcgPct", "ltcgPct", "ltcgExemptionInr", "cessPct")):
         raise ValueError("tax.schedule: rates, exemption and cess must be numbers of 0 or more")
+    ar = cfg.get("ladder", {}).get("autoRestart", {"enabled": False, "afterSessions": 1})
+    if not (isinstance(ar["enabled"], bool) and isinstance(ar["afterSessions"], int) and ar["afterSessions"] >= 1):
+        raise ValueError("ladder.autoRestart: enabled true/false and afterSessions an integer of 1 or more")
     wf = cfg["walkforward"]
     if wf["type"] not in ("rolling", "anchored") or not all(isinstance(wf[k], int) and wf[k] >= 1 for k in ("trainYears", "testYears", "stepYears")):
         raise ValueError("walkforward: type rolling or anchored; train, test and step years integers of 1 or more")
@@ -90,3 +93,9 @@ def load(path: str = CONFIG_PATH) -> dict:
     cfg = json.loads(safe_path(path).read_text(encoding="utf-8"))
     validate(cfg)
     return cfg
+
+
+def restart_after(cfg: dict) -> int | None:
+    """Sessions a flat-locked ladder waits before the simulated owner restarts it, None when the rule is off (the live behaviour)."""
+    ar = cfg.get("ladder", {}).get("autoRestart", {})
+    return ar["afterSessions"] if ar.get("enabled") else None

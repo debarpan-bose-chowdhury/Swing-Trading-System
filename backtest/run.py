@@ -38,7 +38,7 @@ def evaluate(cfg: dict, w: world.World, start: str | None, end: str | None, hair
     start = start or cfg["window"]["start"] or w.first_known_regime()
     end = end or cfg["window"]["end"]
     result = replay.simulate(w.data, w.targets, w.risk, start, end, cfg["capital"]["inr"], w.surveillance, carry_over_days=cfg["fill"]["carryOverDays"],
-                             dividends=w.dividends, vanish_haircut=haircut, progress=progress)
+                             dividends=w.dividends, vanish_haircut=haircut, progress=progress, restart_after=config.restart_after(cfg))
     if result.nav.empty:
         raise ValueError(f"no simulated days between {start} and {end}")
     pieces = tax.lots(result.fills)
@@ -121,10 +121,10 @@ def compare(cfg: dict, start: str | None, end: str | None, point: dict | None = 
                 got[label] = (rep, path)
     rows = [(label, got[label][0]) for label, _, _ in cases]
     paths = [got[label][1] for label, _, _ in cases]
-    lines = [f"{'universe':<28}{'postTaxCagr':>12}{'maxDD':>9}{'sharpe':>8}{'exits':>7}{'writtenOffInr':>15}"]
+    lines = [f"{'universe':<28}{'postTaxCagr':>12}{'maxDD':>9}{'sharpe':>8}{'exits':>7}{'writtenOffInr':>15}{'restarts':>9}"]
     for name, r in rows:
         lines.append(f"{name:<28}{_fmt(r['objectives']['postTaxCagr']):>12}{_fmt(r['objectives']['maxDrawdown']):>9}{_fmt(r['postTax'].get('sharpe')):>8}"
-                     f"{r['vanished']['exits']:>7}{r['vanished']['writtenOffInr']:>15,.0f}")
+                     f"{r['vanished']['exits']:>7}{r['vanished']['writtenOffInr']:>15,.0f}{len(r['ladder']['restarts']):>9}")
     if any(r["trades"]["fills"] == 0 for _, r in rows):
         lines.append("WARNING: a case made 0 fills. At Rs 1 lakh the live sizing minimums stop every order, so the figures above are cash. "
                      "Re-run with e.g. --set sizing.minNewOrderInr=3000 --set sizing.minAdjustmentInr=1500")
@@ -135,6 +135,13 @@ def _fmt(x) -> str:
     return "-" if x is None else f"{x:.3f}"
 
 
+def _cfg(args) -> dict:
+    cfg = config.load()
+    if args.no_auto_restart:
+        cfg["ladder"] = {"autoRestart": {"enabled": False, "afterSessions": 1}}
+    return cfg
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="backtest.run")
     parser.add_argument("--check", action="store_true", help="validate config only (no network, no writes)")
@@ -143,6 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                         help="parameter from params.json, e.g. --set sizing.minNewOrderInr=3000 (repeatable); the live config at Rs 1 lakh cannot trade")
     parser.add_argument("--workers", type=int, help="--compare: parallel processes (default compute.workers in backtest.json, at most one per case; 1 = one after another)")
+    parser.add_argument("--no-auto-restart", action="store_true", help="keep the live ladder: a flat-lock is never restarted (default: ladder.autoRestart in backtest.json)")
     parser.add_argument("--start", help="first simulated day (default: window.start, else the first known regime)")
     parser.add_argument("--end", help="last simulated day (default: window.end, else the end of the data)")
     args = parser.parse_args(argv)
@@ -150,10 +158,10 @@ def main(argv: list[str] | None = None) -> int:
         return check()
     try:
         if args.compare:
-            table, paths = compare(config.load(), args.start, args.end, world.parse_set(args.set), args.workers)
+            table, paths = compare(_cfg(args), args.start, args.end, world.parse_set(args.set), args.workers)
             print(table + "\n" + "\n".join(f"run: wrote {p}" for p in paths))
             return 0
-        print(f"run: wrote {single(config.load(), args.start, args.end, world.parse_set(args.set))}")
+        print(f"run: wrote {single(_cfg(args), args.start, args.end, world.parse_set(args.set))}")
         return 0
     except prep.MissingInput as e:
         print(f"run: {e}", file=sys.stderr)

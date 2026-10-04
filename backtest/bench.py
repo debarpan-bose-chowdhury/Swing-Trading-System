@@ -27,7 +27,7 @@ _WORLD: world.World | None = None
 
 def _simulate(w: world.World, start: str, end: str) -> replay.Result:
     return replay.simulate(w.data, w.targets, w.risk, start, end, w.cfg["capital"]["inr"], w.surveillance,
-                           carry_over_days=w.cfg["fill"]["carryOverDays"], dividends=w.dividends)
+                           carry_over_days=w.cfg["fill"]["carryOverDays"], dividends=w.dividends, restart_after=config.restart_after(w.cfg))
 
 
 def _with_point(w: world.World, schema: params.Schema, point: dict) -> world.World:

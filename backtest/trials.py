@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from app.risk import evaluator
-from backtest import overfit, replay, tax, world
+from backtest import config, overfit, replay, tax, world
 from backtest.params import Schema, key_of
 from backtest.targets import Targets
 from backtest.walkforward import Windows
@@ -70,7 +70,7 @@ class Session:
         risk, analyst = self.schema.apply(point)
         cfg = self.w.cfg
         result = replay.simulate(self.w.data, self._targets_for(analyst), risk, start, end, cfg["capital"]["inr"], self.w.surveillance,
-                                 carry_over_days=cfg["fill"]["carryOverDays"], dividends=self.w.dividends)
+                                 carry_over_days=cfg["fill"]["carryOverDays"], dividends=self.w.dividends, restart_after=config.restart_after(cfg))
         if result.nav.empty:
             raise ValueError(f"no simulated days between {start} and {end}")
         taxes = tax.assess(tax.lots(result.fills), cfg["tax"]["schedule"])
