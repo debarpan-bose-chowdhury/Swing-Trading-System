@@ -16,6 +16,7 @@ makes the re-run identical).
 import hashlib
 import json
 import random
+import shutil
 import sys
 import time
 from concurrent.futures import FIRST_COMPLETED, wait
@@ -88,9 +89,13 @@ class Study:
         if st.dir.exists():
             raise Failed(f"study {spec['name']} already exists ({st.dir}); `study run` continues it, or pick another name")
         st.dir.mkdir(parents=True)
-        write_json(st.dir / "study.json", {**spec, "schemaVersion": space.version})
-        write_json(st.checkpoint_path, {"specHash": spec_hash(spec), "seed": spec["seed"], "identity": None, "counters": {"done": 0}, "optuna": samplers.optuna.__version__})
-        samplers.open_study(spec["name"], st.journal, samplers.make_sampler(spec["sampler"], spec["seed"]), create=True)
+        try:
+            write_json(st.dir / "study.json", {**spec, "schemaVersion": space.version})
+            write_json(st.checkpoint_path, {"specHash": spec_hash(spec), "seed": spec["seed"], "identity": None, "counters": {"done": 0}, "optuna": samplers.optuna.__version__})
+            samplers.open_study(spec["name"], st.journal, samplers.make_sampler(spec["sampler"], spec["seed"]), create=True)
+        except BaseException:
+            shutil.rmtree(st.dir, ignore_errors=True)  # a study that could not be created leaves nothing behind, so `study new` can simply be run again
+            raise
         return st
 
     @classmethod

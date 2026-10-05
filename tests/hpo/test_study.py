@@ -56,6 +56,12 @@ class RunTests(StudyCase):
         with self.assertRaisesRegex(Failed, "already exists"):
             self.new()
 
+    def test_a_study_that_cannot_be_created_leaves_no_folder_behind(self):
+        with patch.object(samplers, "open_study", side_effect=OSError("journal refused")), self.assertRaises(OSError):
+            self.new()
+        self.assertFalse((self.tmp / "data" / "studies" / "t1").exists())
+        self.assertEqual(self.run_study(self.new())["state"], "finished")  # the same name can be created again straight away
+
     def test_same_seed_same_sequence(self):
         a, b = self.new(name="a"), self.new(name="b")
         self.run_study(a)
