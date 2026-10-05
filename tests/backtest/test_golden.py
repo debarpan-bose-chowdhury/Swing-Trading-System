@@ -26,6 +26,14 @@ class Golden(Replay):
         self.assertEqual(got, want)
         self.assertGreater(got["early"]["fillCount"], 10)
 
+    def test_the_fingerprint_does_not_depend_on_the_platform_line_ending(self):
+        """pandas ends CSV lines with os.linesep: on Windows the digests would differ from the recorded ones for identical data."""
+        from unittest.mock import patch
+        r = self.sim_window(self.days[300], self.days[330])
+        with patch("os.linesep", "\r\n"):
+            windows_like = fingerprint(r)
+        self.assertEqual(windows_like, fingerprint(r))
+
     def sim_window(self, start, end):
         from backtest import replay
         return replay.simulate(self.data, self.targets, self.risk, start, end, 700000.0, keep_signals=True)
