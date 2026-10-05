@@ -275,7 +275,12 @@ def cmd_live(a, cfg) -> int:
     opened = False
     try:
         while True:
-            out = report.study_report(folder, cfg, live=True)
+            try:
+                out = report.study_report(folder, cfg, live=True)
+            except OSError as e:  # a page that cannot be rewritten this time is retried on the next refresh, not a reason to stop the dashboard
+                print(f"live page not updated ({e}); retrying", file=sys.stderr)
+                time.sleep(cfg["compute"]["liveRefreshSeconds"])
+                continue
             if a.open and not opened:
                 webbrowser.open(out.resolve().as_uri())
                 opened = True

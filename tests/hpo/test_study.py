@@ -250,3 +250,35 @@ class PoolTests(StudyCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FileReplaceTests(unittest.TestCase):
+    """Windows refuses to replace a file that is open elsewhere (a browser showing live.html, OneDrive syncing): retry, then fall back to a plain write."""
+
+    def test_a_transient_permission_error_is_retried(self):
+        from hpo import status
+        with tempfile.TemporaryDirectory() as t:
+            target, real, calls = Path(t) / "s.json", os.replace, {"n": 0}
+
+            def flaky(a, b):
+                calls["n"] += 1
+                if calls["n"] < 3:
+                    raise PermissionError(5, "Access is denied")
+                return real(a, b)
+
+            with patch("os.replace", flaky):
+                status.write_json(target, {"a": 1})
+            self.assertEqual((json.loads(target.read_text()), calls["n"]), ({"a": 1}, 3))
+            self.assertEqual([p.name for p in Path(t).iterdir()], ["s.json"])
+
+    def test_a_target_that_stays_locked_is_still_written_and_no_temp_file_is_left(self):
+        from hpo import status
+        with tempfile.TemporaryDirectory() as t:
+            target = Path(t) / "live.html"
+            target.write_text("old")
+            tmp = Path(t) / "live.tmp"
+            tmp.write_text("new")
+            with patch("os.replace", side_effect=PermissionError(5, "Access is denied")), patch("time.sleep"):
+                status.replace(tmp, target, tries=3)
+            self.assertEqual(target.read_text(), "new")
+            self.assertFalse(tmp.exists())

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from plotly.offline import get_plotlyjs
 
-from hpo.status import read_json, write_json
+from hpo.status import read_json, replace, write_json
 from hpo.study import read_records
 from hpo.viz import charts, theme
 
@@ -58,5 +58,5 @@ def study_report(study_dir: Path, cfg: dict, live: bool = False) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp")
     tmp.write_text(page(f"{'Live: ' if live else ''}Study {spec['name']}", sub, warnings, tl, cs, cfg["compute"]["liveRefreshSeconds"] if live else None), encoding="utf-8")
-    tmp.replace(out)
+    replace(tmp, out)
     return out
