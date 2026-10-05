@@ -7,7 +7,7 @@ import copy
 import hashlib
 import json
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.analyst import common as analyst_common
@@ -59,6 +59,7 @@ class World:
     targets: Targets
     dividends: Dividends
     surveillance: object
+    cache: dict = field(default_factory=dict, compare=False, repr=False)  # api.py: targets cache and run hashes
 
     @classmethod
     def build(cls, cfg: dict) -> "World":

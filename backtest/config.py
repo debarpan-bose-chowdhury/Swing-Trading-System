@@ -4,9 +4,10 @@ import json
 from datetime import date
 
 from app.market.common import safe_path
+from app.risk import shadow
 
 CONFIG_PATH = "backtest/config/backtest.json"
-MIN_PURGE_DAYS = 168  # the longest selector look-back
+MIN_PURGE_DAYS = 168  # the longest selector look-back; the one floor for walkforward.purgeDays (params.required_purge imports it)
 
 
 def _is_date(v) -> bool:
@@ -29,8 +30,9 @@ def validate(cfg: dict) -> None:
     comp = cfg["capital"]["composition"]
     if not _num(cfg["capital"]["inr"], 1) or abs(sum(comp.values()) - 1.0) > 0.001:
         raise ValueError("capital: inr greater than 0 and composition summing to 1.0")
-    if cfg["fill"]["mode"] != "open" or not (isinstance(cfg["fill"]["carryOverDays"], int) and cfg["fill"]["carryOverDays"] >= 0):
-        raise ValueError("fill: only mode open is supported; carryOverDays an integer of 0 or more")
+    carry = cfg["fill"]["carryOverDays"]
+    if cfg["fill"]["mode"] != "open" or not (carry is None or (isinstance(carry, int) and not isinstance(carry, bool) and carry >= 0)):
+        raise ValueError("fill: only mode open is supported; carryOverDays null (use risk.json shadow.carryOverDays) or an integer of 0 or more")
     if any(cfg["fill"]["realism"].values()):
         raise ValueError("fill.realism: bands, volumeCap, circuitLocks and settlementLag are not implemented yet; keep them false")
     sched = cfg["tax"]["schedule"]
@@ -93,6 +95,12 @@ def load(path: str = CONFIG_PATH) -> dict:
     cfg = json.loads(safe_path(path).read_text(encoding="utf-8"))
     validate(cfg)
     return cfg
+
+
+def carry_over_days(cfg: dict, risk: dict) -> int:
+    """Calendar days an unfilled signal is retried: fill.carryOverDays, or the live shadow.carryOverDays when that is null."""
+    own = cfg["fill"]["carryOverDays"]
+    return shadow.carry_over_days(risk) if own is None else own
 
 
 def restart_after(cfg: dict) -> int | None:

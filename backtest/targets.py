@@ -8,6 +8,7 @@ Not reproduced, on purpose: the live data-quality gates (maxMissingShare, bucket
 (v1 universe = today's bucket members that have stored history), and the delta/holdings fields decide() does not read.
 """
 
+import json
 from bisect import bisect_right
 
 import pandas as pd
@@ -26,7 +27,7 @@ class Targets:
         close = pd.Series(data.index.Close.to_numpy(float), index=pd.DatetimeIndex(data.index.Date))
         if len(close) < cfg["regime"]["minRows"]:
             raise ValueError(f"index has {len(close)} rows, need at least {cfg['regime']['minRows']}")
-        self.history = regime.regime_history(close, cfg["regime"]["persistenceWeeks"], regime.windows_of(cfg))
+        self.history = regime.regime_history(close, cfg["regime"]["persistenceWeeks"], regime.windows_of(cfg), **regime.shape_of(cfg))
         self.dates = list(self.history.date)
         self.active = list(self.history.active_regime)
         adj, value = data.panels()
@@ -77,3 +78,28 @@ class Targets:
                 "regime": {"index": cfg["regime"]["index"], "raw": row.raw_regime, "active": active, "pending": row.pending_regime,
                            "pendingRemainingDays": int(row.pending_remaining_days), "persistenceWeeks": cfg["regime"]["persistenceWeeks"]},
                 "composition": cfg["composition"], "buckets": buckets}
+
+
+class TargetsCache:
+    """Targets keyed by the analyst config (paths excluded), least recently built dropped first. Targets are the expensive part of a
+    run and depend on the analyst config only, so a risk-only change reuses them."""
+
+    def __init__(self, data: PitData, size: int = 4):
+        if size < 1:
+            raise ValueError("targets cache size must be at least 1")
+        self.data, self.size, self._items = data, size, {}
+
+    @staticmethod
+    def key(analyst: dict) -> str:
+        return json.dumps({k: v for k, v in analyst.items() if k != "paths"}, sort_keys=True, default=str)
+
+    def put(self, analyst: dict, targets: Targets) -> None:
+        self._items[self.key(analyst)] = targets
+
+    def get(self, analyst: dict) -> Targets:
+        key = self.key(analyst)
+        if key not in self._items:
+            if len(self._items) >= self.size:
+                self._items.pop(next(iter(self._items)))
+            self._items[key] = Targets(self.data, analyst)
+        return self._items[key]

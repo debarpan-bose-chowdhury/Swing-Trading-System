@@ -11,9 +11,13 @@ import pandas as pd
 from app.analyst import costs
 from app.analyst.ledger import FILL_COLS, read_fills, replay
 from app.market.common import write_csv
-from app.risk.common import Context, Portfolio, is_date, read_json, read_table, risk_dir
+from app.risk.common import CARRY_OVER_DAYS, Context, Portfolio, is_date, read_json, read_table, risk_dir
 
-LOOKBACK_DAYS = 7  # an action whose Open was missing is retried for this long
+LOOKBACK_DAYS = CARRY_OVER_DAYS  # the shadow.carryOverDays default
+
+
+def carry_over_days(cfg: dict) -> int:
+    return cfg.get("shadow", {}).get("carryOverDays", LOOKBACK_DAYS)
 
 
 def root(cfg: dict) -> Path:
@@ -37,7 +41,7 @@ def seed(cfg: dict, actual: Portfolio, asof: str) -> None:
 def apply(ctx: Context) -> Portfolio:
     """Apply the previous run's shadow signals at asOf's Open; returns the shadow portfolio valued from its replayed book."""
     cfg, asof, c = ctx.cfg, ctx.asof, ctx.cfg["costs"]
-    r = root(cfg)
+    r, carry = root(cfg), carry_over_days(cfg)
     fills = read_fills(r / "fills.csv")
     fills = fills[~((fills.trade_date == asof) & (fills.kind == "FILL"))]  # a rerun starts from the state before today's fills
     cash_rows = read_table(r / "cash.csv", ["date", "cash"])
@@ -48,7 +52,7 @@ def apply(ctx: Context) -> Portfolio:
     files = sorted(f for f in (r / "signals").glob("signals_*.json") if "superseded" not in f.name)
     for f in files:
         sig = read_json(f)
-        if not sig or sig["asOf"] >= asof or sig["executionDate"] > asof or (date.fromisoformat(asof) - date.fromisoformat(sig["asOf"])).days > LOOKBACK_DAYS:
+        if not sig or sig["asOf"] >= asof or sig["executionDate"] > asof or (date.fromisoformat(asof) - date.fromisoformat(sig["asOf"])).days > carry:
             continue
         for a in sig["actions"]:
             t, side = a["ticker"], a["side"]

@@ -13,10 +13,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from app.risk import evaluator
-from backtest import config, overfit, replay, tax, world
+from backtest import api, overfit, world
 from backtest.params import Schema, key_of
-from backtest.targets import Targets
 from backtest.walkforward import Windows
 
 
@@ -50,15 +48,6 @@ class Session:
     def __init__(self, w: world.World, schema: Schema, windows: Windows, registry: Registry, holdout_marker: Path):
         self.w, self.schema, self.windows, self.registry, self.marker = w, schema, windows, registry, holdout_marker
         self.code_sha, self.data_hash = world.code_sha(), w.data.data_hash()
-        self._targets: dict[str, Targets] = {}
-
-    def _targets_for(self, analyst: dict) -> Targets:
-        key = json.dumps({k: v for k, v in analyst.items() if k != "paths"}, sort_keys=True, default=str)
-        if key not in self._targets:
-            if len(self._targets) >= 4:
-                self._targets.pop(next(iter(self._targets)))
-            self._targets[key] = Targets(self.w.data, analyst)
-        return self._targets[key]
 
     def evaluate(self, point: dict, start: str, end: str, kind: str = "tuning", fold: int | None = None) -> dict:
         """Run the judge for a point over [start, end], log it, return objectives and the post-tax daily returns.
@@ -69,14 +58,8 @@ class Session:
             self.windows.check_tuning(start, end)
         risk, analyst = self.schema.apply(point)
         cfg = self.w.cfg
-        result = replay.simulate(self.w.data, self._targets_for(analyst), risk, start, end, cfg["capital"]["inr"], self.w.surveillance,
-                                 carry_over_days=cfg["fill"]["carryOverDays"], dividends=self.w.dividends, restart_after=config.restart_after(cfg))
-        if result.nav.empty:
-            raise ValueError(f"no simulated days between {start} and {end}")
-        taxes = tax.assess(tax.lots(result.fills), cfg["tax"]["schedule"])
-        post = tax.post_tax_curve(result.nav, taxes)
-        r = post.pct_change().dropna()
-        perf = evaluator.perf(r, risk["evaluator"]["riskFreeRatePct"])
+        ev = api.evaluate_config(self.w, risk, analyst, start, end)
+        result, r, perf = ev.result, ev.returns, ev.metrics
         objectives = {"postTaxCagr": perf.get("cagr"), "maxDrawdown": perf.get("maxDrawdown"), "ulcerIndex": perf.get("ulcerIndex")}
         pkey = key_of(point)
         window = {"start": start, "end": end, "kind": kind, "fold": fold}

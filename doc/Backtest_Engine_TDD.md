@@ -34,7 +34,7 @@ The backtest replays the live Risk Manager over history. A day loop calls the ap
 |---|---|
 | `window` | `start`, `end` (null = first known regime / end of data), `holdoutYears` 2 |
 | `capital` | `inr` 100,000 and `composition` 50/30/20 (must equal the analyst composition) |
-| `fill` | `mode: open`, `carryOverDays` 7, `realism` flags (bands, volumeCap, circuitLocks, settlementLag) which must stay false in v1 |
+| `fill` | `mode: open`, `carryOverDays` null (reads `risk.json shadow.carryOverDays`, 7) or an integer, `realism` flags (bands, volumeCap, circuitLocks, settlementLag) which must stay false in v1 |
 | `tax` | dated schedule (2008-04-01, 2018-04-01, 2024-07-23) and `confirmed` |
 | `ladder` | `autoRestart`: `enabled` true, `afterSessions` 126 (see The judge) |
 | `walkforward` | rolling 5y train / 1y test / 1y step, `purgeDays` 168 |
@@ -48,7 +48,9 @@ The backtest replays the live Risk Manager over history. A day loop calls the ap
 
 `backtest/config/params.json` holds 43 tunable parameters (sizing 16, selector 15, stops 8, regime 4) with bounds, step and kind, and one cross-parameter constraint. It is validated against the live configs (every path must exist) and gated by `confirmed` (now true).
 
-The only edits to `app/` are in the regime code: `regime.smaFast/smaSlow/momentumDays` (50/200/63) became configurable (`regime.windows_of`, validated in `analyst.common`) so they can be tuned; defaults reproduce the old behaviour exactly.
+Parameter Exposure S1 (`doc/Parameter_Exposure_Spec.md`) turned the remaining hardcoded return-affecting numbers into config keys with the old values as defaults, added `backtest/api.py` (the one module an optimiser imports: `build_world`, `evaluate_config`, `windows`, `holdout_guard`) and the parameter register `doc/parameter_register.csv` (`python -m backtest.register --write|--check`), guarded by an AST scan of numeric literals.
+
+Before S1 the only edits to `app/` were in the regime code: `regime.smaFast/smaSlow/momentumDays` (50/200/63) became configurable (`regime.windows_of`, validated in `analyst.common`) so they can be tuned; defaults reproduce the old behaviour exactly.
 
 ## Data
 
@@ -118,6 +120,8 @@ Run from the repo root, `--check` first, exit codes 0 ok, 1 failed, 2 busy, 3 ga
 | `backtest.prep --check`, `--dividends`, `--scan` | data readiness, Yahoo dividends and splits, calendar and anomaly report |
 | `backtest.surv_proxy --snapshot`, `--calibrate` | keep the app's surveillance lists; score proxy thresholds |
 | `backtest.bench [--years --profile --workers --scaling --set K=V]` | runtime spike |
+| `backtest.golden [--years N --set K=V]` | prints sha256 digests of NAV, fills, signals and targets of the bench window: run before and after a behaviour-preserving change and compare |
+| `backtest.register --write`, `--check` | regenerate / verify `doc/parameter_register.csv` |
 | `backtest.bhav --check`, `--probe`, `--download`, `--build`, `--crosscheck [--strict]`, `--summary`, `--universe-stats` | bhavcopy layer |
 | `backtest.universe --links`, `--probe-symbolchange`, `--validate-adjust`, `--tune-adjust`, `--build-pit` | point-in-time universe |
 
@@ -141,6 +145,7 @@ Offline and synthetic; no network. `tests/app` (root project, `uv run pytest`, c
 | Gate | known-overfit synthetic strategy fails, robust one passes; holdout reads refused |
 | Universe | split detector, links, membership labels independent of later data, pit equals static buckets |
 | Vanished names | exit date and price, exact write-off, nothing changes before the exit |
+| Parameter exposure | each new key at its default changes nothing and at another value moves the result (`ExposedSelectorNumbers`, `ExposedRegimeNumbers`, ladder, shadow, evaluator, sizer tests); `test_golden.py` byte-identical synthetic run; `test_register.py` register current and no unregistered numeric literal; `test_param_exposure.py` API parity |
 | Security | file loaders go through the app's `safe_path` (paths must stay inside the working directory) |
 
 `backtest.parity` (run on your PC, writes only `backtest/data/parity/report.json`): `--targets` runs the app's own `app.analyst.signals --as-of` logic (read-only, in process) for the newest N and K evenly spaced older rebalance dates and requires the backtest's targets to equal it (regime, composition, picks, ranks and numbers); the replay uses the newest bucket file as its universe (the app's own rule, the newest file dated on or before the date, is refused on real data because older bucket files are purged; `--app-universe` restores it), so it isolates the selection logic; the registry's active flag and the app's data-quality gates still apply on the app side and show up as differences. Any difference lists, per pick, whether it is in the backtest universe, its registry status and which bucket files exist. A date the app refuses is listed as LIVE_REFUSED, not as a mismatch. It also compares every stored `targets_<date>.json` (picks and regime exact, numbers within 2% because adjusted closes are revised). `--signals` checks every stored `signals_<asOf>.json` for regime, weekly flag against the rebalance rule, execution date and exposure caps against `risk.json`; the book, NAV, ladder state and actions depend on your real account and are not compared. Exit 0 no mismatch, 1 mismatch or failure, 3 inputs missing.

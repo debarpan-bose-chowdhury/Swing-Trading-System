@@ -102,6 +102,25 @@ class ValidationTests(Env):
         cfg["ladder"]["restartFrom"] = "2026-10-05"
         common.validate(cfg, "run")
 
+    def test_exposed_numbers_are_range_checked_and_default_to_the_old_values(self):
+        c = self.cfg
+        self.assertEqual((c["sizing"]["noTradeBand"]["floorPct"], c["ladder"]["reRisk"]["rungsPerWeek"], c["ladder"]["restartRungOffset"]), (0.025, 1, 1))
+        self.assertEqual((c["shadow"]["carryOverDays"], c["evaluator"]["tradingDaysPerYear"]), (7, 252))
+        self.bad(lambda c: c["sizing"]["noTradeBand"].update(floorPct=1.5), "floorPct")
+        self.bad(lambda c: c["sizing"]["noTradeBand"].update(floorPct="x"), "floorPct")
+        self.bad(lambda c: c["ladder"]["reRisk"].update(rungsPerWeek=0), "rungsPerWeek")
+        self.bad(lambda c: c["ladder"].update(restartRungOffset=0), "restartRungOffset")
+        self.bad(lambda c: c["ladder"].update(restartRungOffset=5), "restartRungOffset")  # four levels
+        self.bad(lambda c: c["shadow"].update(carryOverDays=-1), "carryOverDays")
+        self.bad(lambda c: c["evaluator"].update(tradingDaysPerYear=0), "tradingDaysPerYear")
+        cfg = copy.deepcopy(self.cfg)
+        cfg["ladder"]["restartRungOffset"] = 4
+        common.validate(cfg, "run")
+
+    def test_dead_stop_keys_must_hold_the_only_implemented_values(self):
+        self.bad(lambda c: c["stops"].update(atrMethod="ema"), "atrMethod")
+        self.bad(lambda c: c["stops"].update(priceBasis="Close"), "priceBasis")
+
     def test_exposure_heat_and_liquidity(self):
         self.bad(lambda c: c["exposure"]["regimeCap"].update(SIDEWAYS=1.0), "exposure.regimeCap")
         self.bad(lambda c: c["exposure"]["regimeCap"].update(BULL=1.5), "exposure.regimeCap")

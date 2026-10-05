@@ -397,3 +397,15 @@ class EvaluateStageTests(JournalEnv):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TradingDaysPerYear(unittest.TestCase):
+    def test_h11_default_is_252_and_scaling_follows_the_setting(self):
+        r = series(np.random.default_rng(2).normal(0.001, 0.01, 300))
+        self.assertEqual(evaluator.perf(r, 0.05), evaluator.perf(r, 0.05, days=252))
+        a, b = evaluator.perf(r, 0.0, days=252), evaluator.perf(r, 0.0, days=365)
+        self.assertAlmostEqual(b["volatility"] / a["volatility"], math.sqrt(365 / 252), places=4)
+        self.assertEqual((a["totalReturn"], a["maxDrawdown"]), (b["totalReturn"], b["maxDrawdown"]))  # only the annualised figures move
+        self.assertNotEqual(a["cagr"], b["cagr"])
+        self.assertEqual(evaluator.days_of({"evaluator": {}}), 252)
+        self.assertEqual(evaluator.days_of({"evaluator": {"tradingDaysPerYear": 250}}), 250)

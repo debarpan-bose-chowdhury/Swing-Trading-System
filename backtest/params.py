@@ -15,9 +15,9 @@ from pathlib import Path
 from app.analyst import common as analyst_common
 from app.analyst.regime import UNKNOWN_EXTRA
 from app.risk import common as risk_common
+from backtest import config
 
 LONGEST_WINDOW_KEYS = ("selector.lookback.", "selector.trendMa", "regime.smaSlow", "regime.momentumDays")  # look-back windows, in trading days
-MIN_PURGE = 168  # trading days; backtest.json walkforward.purgeDays cannot go below it
 
 
 class InvalidPoint(ValueError):
@@ -172,14 +172,14 @@ class Schema:
         return out
 
     def required_purge(self) -> int:
-        """Longest look-back any allowed point can use, in trading days (never below MIN_PURGE)."""
+        """Longest look-back any allowed point can use, in trading days (never below config.MIN_PURGE_DAYS)."""
         longest = [p.high for p in self.params if p.key.startswith(LONGEST_WINDOW_KEYS)]
-        return max([MIN_PURGE, *map(int, longest)])
+        return max([config.MIN_PURGE_DAYS, *map(int, longest)])
 
     def warmup_rows(self) -> int:
-        """Index rows before the slowest allowed regime is known (UNKNOWN_EXTRA past the longest regime window)."""
+        """Index rows before the slowest allowed regime is known (regime.unknownExtra past the longest regime window)."""
         longest = max(self.by_key["regime.smaSlow"].high, self.by_key["regime.momentumDays"].high)
-        return int(longest) + UNKNOWN_EXTRA
+        return int(longest) + self.base["analyst"]["regime"].get("unknownExtra", UNKNOWN_EXTRA)
 
     def common_start(self, index_dates: list[str]) -> str:
         """First day every allowed point has a known regime, plus the longest allowed persistence (5 sessions a week)."""

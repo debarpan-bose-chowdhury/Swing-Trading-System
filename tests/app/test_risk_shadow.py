@@ -227,3 +227,17 @@ class ShadowRunTests(Env):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CarryOverDays(ApplyEnv):
+    def test_h9_default_is_seven_days(self):
+        self.assertEqual(shadow.carry_over_days(self.cfg), 7)
+        self.assertEqual(shadow.carry_over_days({}), 7)
+
+    def test_h9_a_signal_older_than_the_carry_over_is_dropped(self):
+        for days, filled in ((7, True), (3, False)):
+            self.seed()
+            self.cfg["shadow"]["carryOverDays"] = days
+            self.signals_file("2026-09-18", FRIDAY, [act("XYZ", "SELL", 40)])  # 7 calendar days old on Friday 09-25
+            pf, _ = self.apply()
+            self.assertEqual(len(pf.book) == 0, filled, days)

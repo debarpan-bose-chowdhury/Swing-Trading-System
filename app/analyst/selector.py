@@ -7,8 +7,20 @@ import pandas as pd
 
 from app.market.store import Store
 
-BEAR_ROWS = 70  # the composite score needs 63 days of history plus the 20-day return window
+BEAR_WINDOWS = {"shortDays": 20, "longDays": 63, "hitDays": 20, "volDays": 20, "ddDays": 63}  # selector.bearScore.windows defaults
+BEAR_ROW_BUFFER = 7  # rows kept beyond the longest BEAR window (70 rows with the defaults)
+BEAR_OPTIONS = ("windows", "confirmThreshold")  # bearScore keys that are not score weights
 CRORE = 1e7
+
+
+def bear_windows(bear: dict) -> dict:
+    """The BEAR score windows in trading days; a missing key keeps its default."""
+    return {**BEAR_WINDOWS, **bear.get("windows", {})}
+
+
+def bear_rows(bear: dict) -> int:
+    """Rows of history the BEAR composite needs per ticker: the longest window plus a buffer (70 by default)."""
+    return max(bear_windows(bear).values()) + BEAR_ROW_BUFFER
 
 
 def rows_needed(cfg: dict) -> int:
@@ -16,7 +28,7 @@ def rows_needed(cfg: dict) -> int:
     sel = cfg["selector"]
     strategies = [s for per_bucket in cfg["strategies"].values() for s in per_bucket.values()]
     need = max(max(s["stock_trend_ma"] + 5, s["lookback"] + sel["momentumSkipDays"] + 2) for s in strategies)
-    return max(need, BEAR_ROWS, sel["liquidity"]["windowDays"]) + 5
+    return max(need, bear_rows(sel["bearScore"]), sel["liquidity"]["windowDays"]) + 5
 
 
 def bucket_universe(cfg: dict, bucket: str, rebalance: str) -> tuple[str, list[str]]:
@@ -53,22 +65,24 @@ def load_panel(store: Store, symbols: list[str], rebalance: str, rows: int) -> t
     return pd.DataFrame(adj).sort_index(), pd.DataFrame(value).sort_index(), len(symbols) - len(adj)
 
 
-def _bear_order(hist: pd.DataFrame, weights: dict) -> tuple[pd.Series, int]:
+def _bear_order(hist: pd.DataFrame, bear: dict) -> tuple[pd.Series, int]:
     """Composite defensive score per ticker, best first (momentum-confirmed names ahead of the rest), plus the
-    number of tickers without the full 70-row history."""
-    p = hist.tail(BEAR_ROWS)
-    if len(p) < BEAR_ROWS:
+    number of tickers without the full history (70 rows with the default windows)."""
+    w, weights, rows = bear_windows(bear), {k: v for k, v in bear.items() if k not in BEAR_OPTIONS}, bear_rows(bear)
+    p = hist.tail(rows)
+    if len(p) < rows:
         return pd.Series(dtype=float), len(hist.columns)
     scorable = p.columns[p.notna().all()]
     p = p[scorable]
     last = p.iloc[-1]
-    mom20, mom63 = last / p.iloc[-21] - 1, last / p.iloc[-64] - 1
-    ret = p.pct_change().iloc[-20:]
+    short, long = last / p.iloc[-1 - w["shortDays"]] - 1, last / p.iloc[-1 - w["longDays"]] - 1
+    ret = p.pct_change()
     score = (
-        weights["mom20"] * mom20 + weights["mom63"] * mom63 + weights["hit20"] * (ret > 0).mean()
-        + weights["vol20"] * ret.std(ddof=0) + weights["dd63"] * (last / p.iloc[-64:].max() - 1)
+        weights["mom20"] * short + weights["mom63"] * long + weights["hit20"] * (ret.iloc[-w["hitDays"]:] > 0).mean()
+        + weights["vol20"] * ret.iloc[-w["volDays"]:].std(ddof=0) + weights["dd63"] * (last / p.iloc[-1 - w["ddDays"]:].max() - 1)
     )
-    frame = pd.DataFrame({"score": score, "tier": ((mom20 > 0) & (mom63 > 0)).map({True: 0, False: 1})})
+    confirm = bear.get("confirmThreshold", 0.0)
+    frame = pd.DataFrame({"score": score, "tier": ((short > confirm) & (long > confirm)).map({True: 0, False: 1})})
     frame = frame.rename_axis("ticker").reset_index().sort_values(["tier", "score", "ticker"], ascending=[True, False, True])
     return frame.set_index("ticker").score, len(hist.columns) - len(scorable)
 
@@ -77,7 +91,7 @@ def select_bucket(adj: pd.DataFrame, value: pd.DataFrame, rebalance: str, strate
     """Picks (best first) and exclusion counts for one bucket.
 
     A ticker needs a row on the rebalance date (no forward-fill), the full trend-MA and momentum history, and the
-    liquidity minimum. Candidates have momentum > 0 and a price above the trend MA; plain momentum ranks them,
+    liquidity minimum. Candidates have momentum > minMomentum (0) and a price above the trend MA x (1 + trendBuffer); plain momentum ranks them,
     except in BEAR where the composite score does and the candidate pool is not cut to top_n first.
     """
     counts = {"noRowOnRebalanceDate": 0, "insufficientHistory": 0, "illiquid": 0}
@@ -103,7 +117,7 @@ def select_bucket(adj: pd.DataFrame, value: pd.DataFrame, rebalance: str, strate
     counts["illiquid"] = int((complete & ~liquid).sum())
 
     price = hist.iloc[-1]
-    ok = complete & liquid & (momentum > 0) & (price > trend)
+    ok = complete & liquid & (momentum > sel.get("minMomentum", 0.0)) & (price > trend * (1 + sel.get("trendBuffer", 0.0)))
     frame = pd.DataFrame({"momentum": momentum, "price": price, "trendMa": trend})[ok]
     if regime == "BEAR" and not frame.empty:
         order, unscored = _bear_order(hist[frame.index], sel["bearScore"])

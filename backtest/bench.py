@@ -19,7 +19,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 import pandas as pd
 
-from backtest import config, params, prep, replay, walkforward, workers, world
+from backtest import api, config, params, prep, replay, walkforward, workers, world
 from backtest.targets import Targets
 
 _WORLD: world.World | None = None
@@ -27,7 +27,7 @@ _WORLD: world.World | None = None
 
 def _simulate(w: world.World, start: str, end: str) -> replay.Result:
     return replay.simulate(w.data, w.targets, w.risk, start, end, w.cfg["capital"]["inr"], w.surveillance,
-                           carry_over_days=w.cfg["fill"]["carryOverDays"], dividends=w.dividends, restart_after=config.restart_after(w.cfg))
+                           carry_over_days=config.carry_over_days(w.cfg, w.risk), dividends=w.dividends, restart_after=config.restart_after(w.cfg))
 
 
 def _with_point(w: world.World, schema: params.Schema, point: dict) -> world.World:
@@ -64,9 +64,7 @@ def parallel(k: int, span: tuple[str, str], point: dict, single_thread: bool) ->
 
 
 def windows_for(w: world.World, schema: params.Schema) -> walkforward.Windows:
-    cfg = w.cfg
-    dates = list(w.data.index.Date)
-    return walkforward.Windows(dates, schema.common_start(dates), cfg["walkforward"], cfg["window"]["holdoutYears"], schema.required_purge())
+    return api.windows(w, schema)
 
 
 def gate_simulations(schema: params.Schema, windows: walkforward.Windows, tried: int) -> dict:
