@@ -44,6 +44,30 @@ class IsolationTests(unittest.TestCase):
         self.assertIn("hpo/data/", (REPO / ".gitignore").read_text(encoding="utf-8"))
 
 
+class ProbeTests(unittest.TestCase):
+    def test_the_probe_report_sets_every_limit_against_what_the_run_reached(self):
+        from hpo import settings
+        cfg = settings.load("hpo/config/hpo.json")
+        out = {"status": "ok", "values": [0.07, 0.12], "constraints": {"min_fills": -100, "fills_per_fold_year": 12.0, "min_exposure": 0.31, "dd_cap": -0.18},
+               "metrics": {"cagr": 0.09, "calmar": 0.75, "fills": 400, "avgExposure": 0.09, "foldCagr": [0.1, 0.05], "foldDrawdown": [-0.1, -0.12], "foldFillsPerYear": [30.0, 3.0]},
+               "regimeShare": {"BULL": 0.5, "BEAR": 0.5}}
+        text = "\n".join(cli.probe_lines(out, cfg, {"risk.sizing.minNewOrderInr": 3000}))
+        self.assertIn("ok     fills", text)
+        self.assertIn("BREAKS fills per fold-year (worst)", text)
+        self.assertIn("BREAKS average exposure", text)
+        self.assertIn("9.0%", text)
+        self.assertIn("ok     max drawdown depth", text)
+        self.assertIn("fold 2:", text)
+        self.assertIn("risk.sizing.minNewOrderInr", text)
+        self.assertIn("status aborted", "\n".join(cli.probe_lines({"status": "aborted", "error": None, "attrs": {"abortReason": "x"}}, cfg, {})))
+
+    def test_probe_rejects_an_unknown_parameter(self):
+        self.assertEqual(cli.main(["probe", "--set", "no.such=1"]), 1)
+
+    def test_values_are_parsed_as_numbers_or_booleans(self):
+        self.assertEqual([cli._value(x) for x in ("3000", "0.5", "-2", "true", "False")], [3000, 0.5, -2, True, False])
+
+
 class CliTests(unittest.TestCase):
     def run_cli(self, *argv):
         out, err = io.StringIO(), io.StringIO()

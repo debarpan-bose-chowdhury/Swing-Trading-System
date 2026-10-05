@@ -6,6 +6,7 @@
   sensitivity --name N            importance and the freeze list (writes sensitivity.json and proposed_active.yaml in the study folder)
   report --name N | --candidate ID [--open]   HTML study report or candidate report;  live --name N  auto-refreshing dashboard while a study runs
   ledger show
+  probe [--set NAME=VALUE ...]    run ONE configuration (live default plus the --set values) with no abort rules and show it against every constraint limit
   front --name N [--select calmar|knee]   the feasible front and one pick
   stages plan|advise --name N     B-block study files from a screen; the B-to-C switch advice (GP refinement file)
   robust --name N [--top 30]      neighbourhood-score the finalists (plateau, not peak); writes robust.json, prints the pick or 'keep defaults'
@@ -114,6 +115,51 @@ def cmd_sensitivity(a, cfg) -> int:
     print(_table([{**r, "name": r["name"][-48:]} for r in res["dims"]], ["name", "importanceF1", "importanceF2", "importanceFeasibility", "spearmanF1", "decision"]))
     print(f"\nkeep {len(res['keep'])}, freeze {len(res['freeze'])} ({len(res['collapsedOffsets'])} per-bucket offsets collapse to the shared value); "
           f"proposed next study: {st.dir / 'proposed_active.yaml'}")
+    return 0
+
+
+def _value(text: str):
+    low = text.strip().lower()
+    if low in ("true", "false"):
+        return low == "true"
+    return int(text) if text.lstrip("-").isdigit() else float(text)
+
+
+def probe_lines(out: dict, cfg: dict, changed: dict) -> list[str]:
+    """One run against every limit: what this configuration actually reaches, so the constraint limits can be judged against real numbers."""
+    c = cfg["constraints"]
+    if out["status"] != "ok":
+        return [f"status {out['status']}: {out.get('error') or out.get('attrs')}"]
+    m, k = out["metrics"], out["constraints"]
+    f1, depth = out["values"]
+    fold = list(zip(m.get("foldCagr", []), m.get("foldDrawdown", []), m.get("foldFillsPerYear", [])))
+    lim = lambda name, got, limit, bad: f"  {'BREAKS' if bad else 'ok    '} {name:<22} {got:<14} limit {limit}"  # noqa: E731
+    lines = [f"changed from the live default: {changed or 'nothing'}", f"CAGR (CVaR of worst folds) {f1:.2%}   full-span CAGR {m.get('cagr') or 0:.2%}   max drawdown depth {depth:.2%}   calmar {m.get('calmar')}",
+             "constraints (a run is feasible only when none breaks):",
+             lim("fills", m.get("fills"), f">= {c['minFills']}", k["min_fills"] > 0), lim("fills per fold-year (worst)", f"{min(m.get('foldFillsPerYear') or [0]):.1f}", f">= {c['minFillsPerFoldYear']}", k["fills_per_fold_year"] > 0),
+             lim("average exposure", f"{m.get('avgExposure', 0):.1%}", f">= {c['minAvgExposure']:.0%}", k["min_exposure"] > 0), lim("max drawdown depth", f"{depth:.1%}", f"<= {-c['maxDrawdown']:.0%}", k["dd_cap"] > 0),
+             "folds (CAGR, max drawdown, fills per year):"]
+    lines += [f"  fold {i + 1}: {a:>8.2%} {b:>8.2%} {n:>6.1f}" for i, (a, b, n) in enumerate(fold)]
+    lines.append("regime shares: " + ", ".join(f"{r} {v:.0%}" for r, v in out.get("regimeShare", {}).items()))
+    return lines
+
+
+def cmd_probe(a, cfg) -> int:
+    _, sp = _space(cfg)
+    sets = dict(x.split("=", 1) for x in (a.set or []))
+    changed = {n: _value(v) for n, v in sets.items()}
+    unknown = [n for n in changed if n not in sp.dims]
+    if unknown:
+        raise Failed(f"unknown parameter(s) {unknown}: see `space show`")
+    values = sp.complete(changed)
+    pool = _pool(cfg, 1)
+    try:
+        t0 = time.time()
+        out = pool.submit({"values": values, "noAbort": True}).result()
+    finally:
+        pool.close()
+    print("\n".join(probe_lines(out, cfg, changed)))
+    print(f"({time.time() - t0:.0f} s; no abort rules, nothing is recorded in any study)")
     return 0
 
 
@@ -328,6 +374,8 @@ def parser() -> argparse.ArgumentParser:
     ssub.add_parser("status").add_argument("--name", required=True)
     ssub.add_parser("diagnose").add_argument("--name", required=True)
     sub.add_parser("sensitivity").add_argument("--name", required=True)
+    pr = sub.add_parser("probe")
+    pr.add_argument("--set", action="append", metavar="NAME=VALUE")
     fr = sub.add_parser("front")
     fr.add_argument("--name", required=True)
     fr.add_argument("--select", choices=["calmar", "knee"], default="calmar")
@@ -381,7 +429,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.cmd in LATER:
             print(f"`{a.cmd}` arrives in phase {LATER[a.cmd]} of doc/HPO_TDD.md")
             return 1
-        handler = {"space": cmd_space, "study": cmd_study, "sensitivity": cmd_sensitivity, "front": cmd_front, "stages": cmd_stages, "robust": cmd_robust, "gate": cmd_gate, "holdout": cmd_holdout, "promote": cmd_promote, "shadow": cmd_shadow, "report": cmd_report, "live": cmd_live, "ledger": cmd_ledger}.get(a.cmd)
+        handler = {"space": cmd_space, "study": cmd_study, "sensitivity": cmd_sensitivity, "front": cmd_front, "probe": cmd_probe, "stages": cmd_stages, "robust": cmd_robust, "gate": cmd_gate, "holdout": cmd_holdout, "promote": cmd_promote, "shadow": cmd_shadow, "report": cmd_report, "live": cmd_live, "ledger": cmd_ledger}.get(a.cmd)
         if handler is None:
             parser().print_help()
             return 1
