@@ -1,0 +1,8 @@
+# Stage 0: find the sizing that trades at Rs 1 lakh (sizing minimums, name caps, risk per position). Sobol first, then TPE: switch `sampler`
+# to tpe in a second file once the screen shows where trades happen.
+name: s0
+stage: "0"
+sampler: sobol
+active: ["stage:0"]
+trials: 96
+seed: 1

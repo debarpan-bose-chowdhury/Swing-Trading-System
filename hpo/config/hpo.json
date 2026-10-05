@@ -1,0 +1,16 @@
+{
+  "paths": {"data": "hpo/data", "register": "doc/parameter_register.csv", "schema": "hpo/schema/parameters.schema.json",
+            "extraBounds": "hpo/config/space_extra.json", "studies": "hpo/config/studies"},
+  "universe": {"selection": "pit", "writeOff": 0.5, "stressWriteOffs": [0.0, 1.0], "finalCheck": "today"},
+  "objectives": {"cagr": {"fold": "cvar", "worstShare": 0.30}, "drawdown": "span", "hvReference": [-0.10, 0.35]},
+  "constraints": {"maxDrawdown": -0.30, "minFills": 300, "minFillsPerFoldYear": 15, "minAvgExposure": 0.40, "abortDrawdown": -0.35, "abortNoFillYears": 3},
+  "space": {"compositionFloor": 0.1, "offsetShare": 0.25, "variants": 3},
+  "ledger": {"effectiveNCap": 200, "clusterRhoMax": 0.5, "defaultEffectiveRatio": 0.3},
+  "robust": {"top": 30, "neighbours": 16, "quantile": 0.25, "intStep": 1, "floatRel": 0.10,
+             "stress": {"slippageMult": 2.0, "chargesMult": 1.3, "writeOff": 1.0, "delayDays": 1, "dropNames": 0.05}},
+  "gate": {"pboMax": 0.20, "dsrMin": 0.95, "oosFloorCagr": 0.0, "spaP": 0.10, "cagrRel": 0.20, "cagrAbs": 0.02, "ddAbs": 0.03, "ulcerRel": 0.25, "neighbourShare": 0.80},
+  "sensitivity": {"keepShare": 0.80, "minImportance": 0.01, "maxActive": 25},
+  "shadow": {"weeks": 13, "trackingGapPp": 2.0},
+  "compute": {"workers": 8, "targetsCache": 4, "failShareAbort": 0.05, "failWindow": 50, "seed": 1, "lockStaleHours": 6, "liveRefreshSeconds": 10},
+  "optuna": {"version": "5.0.*", "storage": "journal"}
+}
