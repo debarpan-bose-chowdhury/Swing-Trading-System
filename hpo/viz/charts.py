@@ -280,3 +280,7 @@ def clean(x):
     if isinstance(x, np.integer):
         return int(x)
     return x
+
+
+def clean_all(cs: list[dict]) -> list[dict]:
+    return [clean(c) for c in cs]

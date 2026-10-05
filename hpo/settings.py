@@ -12,8 +12,8 @@ SECTIONS = {
     "constraints": {"maxDrawdown", "minFills", "minFillsPerFoldYear", "minAvgExposure", "abortDrawdown", "abortNoFillYears"},
     "space": {"compositionFloor", "offsetShare", "variants"},
     "ledger": {"effectiveNCap", "clusterRhoMax", "defaultEffectiveRatio"},
-    "robust": {"top", "neighbours", "quantile", "intStep", "floatRel", "stress"},
-    "gate": {"pboMax", "dsrMin", "oosFloorCagr", "spaP", "cagrRel", "cagrAbs", "ddAbs", "ulcerRel", "neighbourShare"},
+    "robust": {"top", "neighbours", "quantile", "intStep", "floatRel", "cliffPp", "stress"},
+    "gate": {"pboMax", "dsrMin", "oosFloorCagr", "oosIsMin", "spaP", "cagrRel", "cagrAbs", "ddAbs", "ulcerRel", "neighbourShare"},
     "sensitivity": {"keepShare", "minImportance", "maxActive"},
     "shadow": {"weeks", "trackingGapPp"},
     "compute": {"workers", "targetsCache", "failShareAbort", "failWindow", "seed", "lockStaleHours", "liveRefreshSeconds"},
@@ -56,7 +56,7 @@ def validate(cfg: dict) -> None:
     if not (_int(lg["effectiveNCap"], 1) and _num(lg["clusterRhoMax"], 0, 1) and _num(lg["defaultEffectiveRatio"], 0.001, 1)):
         raise ValueError("ledger: effectiveNCap an integer of 1 or more, clusterRhoMax in [0, 1], defaultEffectiveRatio in (0, 1]")
     r = cfg["robust"]
-    if not (_int(r["top"], 1) and _int(r["neighbours"], 1) and _num(r["quantile"], 0, 1) and _int(r["intStep"], 1) and _num(r["floatRel"], 0, 1)
+    if not (_int(r["top"], 1) and _int(r["neighbours"], 1) and _num(r["quantile"], 0, 1) and _int(r["intStep"], 1) and _num(r["floatRel"], 0, 1) and _num(r["cliffPp"], 0, 1)
             and set(r["stress"]) == {"slippageMult", "chargesMult", "writeOff", "delayDays", "dropNames"}):
         raise ValueError("robust: top and neighbours integers of 1 or more, quantile and floatRel in [0, 1], stress with its five keys")
     g = cfg["gate"]

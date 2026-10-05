@@ -4,11 +4,13 @@
   space build|check|show [--stage N]
   study new --config F | run --name N [--trials T] [--workers W] [--override-cap "reason"] | resume --name N | status --name N
   sensitivity --name N            importance and the freeze list (writes sensitivity.json and proposed_active.yaml in the study folder)
-  report --name N [--open]        HTML study report;  live --name N  auto-refreshing dashboard while a study runs
+  report --name N | --candidate ID [--open]   HTML study report or candidate report;  live --name N  auto-refreshing dashboard while a study runs
   ledger show
   front --name N [--select calmar|knee]   the feasible front and one pick
   stages plan|advise --name N     B-block study files from a screen; the B-to-C switch advice (GP refinement file)
-  robust, gate, holdout, promote: later phases (they exit 1 with a message until built)
+  robust --name N [--top 30]      neighbourhood-score the finalists (plateau, not peak); writes robust.json, prints the pick or 'keep defaults'
+  gate --candidate ID             full evidence (stress, neighbours, grid, PBO/DSR/SPA, exploit audit) and the verdict; candidates/<id>/report.html (charts 11-24); exit 3 when not met
+  holdout, promote: later phases (they exit 1 with a message until built)
 """
 
 import argparse
@@ -22,11 +24,12 @@ from pathlib import Path
 import yaml
 
 from hpo import ledger as ledger_mod
-from hpo import objective, pareto, sensitivity, settings, stages, space as space_mod, study as study_mod
+from hpo import gate as gate_mod, objective, pareto, robust as robust_mod, sensitivity, settings, stages, space as space_mod, study as study_mod
 from hpo.errors import Busy, Failed, Refusal
-from hpo.status import read_json, write_json
+from hpo.evalpool import EvalPool
+from hpo.status import RunLock, read_json, write_json
 
-LATER = {"robust": 4, "gate": 4, "holdout": 5, "promote": 5}
+LATER = {"holdout": 5, "promote": 5}
 
 
 def _space(cfg: dict):
@@ -146,11 +149,62 @@ def cmd_stages(a, cfg) -> int:
     return 0
 
 
+def _pool(cfg: dict, workers: int | None) -> EvalPool:
+    return EvalPool(functools.partial(objective.BacktestRunner, cfg), workers or cfg["compute"]["workers"])
+
+
+def cmd_robust(a, cfg) -> int:
+    _, sp = _space(cfg)
+    st = study_mod.Study.open(cfg, sp, a.name)
+    with RunLock(st.dir / "run.lock", cfg["compute"]["lockStaleHours"]):
+        pool = _pool(cfg, a.workers)
+        try:
+            st.verify_inputs(pool)
+            doc = robust_mod.run(st, pool, cfg, a.top, out=sys.stderr)
+        finally:
+            pool.close()
+    show = [{"trial": s["trial"], "id": s["trialId"], "cagr%": round(100 * s["f1"], 2), "depth%": round(100 * s["depth"], 2), "q25 cagr%": round(100 * s["q25F1"], 2) if s["q25F1"] is not None else "-",
+             "within": f"{s['share']:.0%}", "cliffs": len(s["cliffs"]), "robust": "yes" if s["robust"] else "no", "pick": "<--" if s["trialId"] == doc["selected"] else ""} for s in doc["scores"]]
+    print(_table(show, ["trial", "id", "cagr%", "depth%", "q25 cagr%", "within", "cliffs", "robust", "pick"]))
+    print(f"\n{doc['decision']}" + (f": {doc['selected']} (run `gate --candidate {doc['selected']}`)" if doc["selected"] else ": no finalist is robust, the live configuration stays"))
+    return 0
+
+
+def cmd_gate(a, cfg) -> int:
+    _, sp = _space(cfg)
+    name, rec = study_mod.find_trial(cfg, a.candidate)
+    st = study_mod.Study.open(cfg, sp, name)
+    folder = Path(cfg["paths"]["data"]) / "candidates" / a.candidate
+    with RunLock(st.dir / "run.lock", cfg["compute"]["lockStaleHours"]):
+        pool = _pool(cfg, a.workers)
+        try:
+            st.verify_inputs(pool)
+            ev = gate_mod.collect(st, pool, cfg, rec, st.ledger, out=sys.stderr)
+        finally:
+            pool.close()
+    verdict, aud = gate_mod.checks(ev, cfg), None
+    aud = gate_mod.audit(ev, cfg)
+    gate_mod.save(folder, ev, verdict, aud)
+    from hpo.viz import candidate
+    candidate.candidate_report(folder, cfg)
+    for k, v in verdict["checks"].items():
+        print(f"  {'pass' if v['passed'] else 'FAIL'}  {k}" + ("" if v.get("blocking", True) else "  (label only)"))
+    print(f"exploit audit: {'clean' if aud['passed'] else 'flagged ' + ', '.join(aud['flagged'])}; not assessed: {len(aud['notAssessed'])} items (see the report)")
+    if verdict["label"]:
+        print(f"label: {verdict['label']}")
+    print(f"gate {'passed' if verdict['passed'] else 'NOT met: ' + ', '.join(verdict['failed'])}; report {folder / 'report.html'}")
+    return 0 if verdict["passed"] else 3
+
+
 def cmd_report(a, cfg) -> int:
     from hpo.viz import report
     if getattr(a, "candidate", None):
-        print("candidate reports (charts 11-24) arrive with the robustness phase")
-        return 1
+        from hpo.viz import candidate
+        out = candidate.candidate_report(Path(cfg["paths"]["data"]) / "candidates" / a.candidate, cfg)
+        print(out)
+        if a.open:
+            webbrowser.open(out.resolve().as_uri())
+        return 0
     out = report.study_report(Path(cfg["paths"]["data"]) / "studies" / a.name, cfg)
     print(out)
     if a.open:
@@ -206,6 +260,13 @@ def parser() -> argparse.ArgumentParser:
     fr = sub.add_parser("front")
     fr.add_argument("--name", required=True)
     fr.add_argument("--select", choices=["calmar", "knee"], default="calmar")
+    rb = sub.add_parser("robust")
+    rb.add_argument("--name", required=True)
+    rb.add_argument("--top", type=int)
+    rb.add_argument("--workers", type=int)
+    gt = sub.add_parser("gate")
+    gt.add_argument("--candidate", required=True)
+    gt.add_argument("--workers", type=int)
     sg = sub.add_parser("stages")
     sg.add_argument("action", choices=["plan", "advise"])
     sg.add_argument("--name", required=True)
@@ -242,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.cmd in LATER:
             print(f"`{a.cmd}` arrives in phase {LATER[a.cmd]} of doc/HPO_TDD.md")
             return 1
-        handler = {"space": cmd_space, "study": cmd_study, "sensitivity": cmd_sensitivity, "front": cmd_front, "stages": cmd_stages, "report": cmd_report, "live": cmd_live, "ledger": cmd_ledger}.get(a.cmd)
+        handler = {"space": cmd_space, "study": cmd_study, "sensitivity": cmd_sensitivity, "front": cmd_front, "stages": cmd_stages, "robust": cmd_robust, "gate": cmd_gate, "report": cmd_report, "live": cmd_live, "ledger": cmd_ledger}.get(a.cmd)
         if handler is None:
             parser().print_help()
             return 1

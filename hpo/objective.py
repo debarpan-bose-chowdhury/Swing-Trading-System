@@ -12,6 +12,7 @@ valid. A trial that cannot be scored (rejected point, aborted run) carries the w
 performance: the constraints make it infeasible and every report greys it out.
 """
 
+import json
 import math
 import time
 
@@ -97,6 +98,59 @@ def score(returns: pd.Series, nav: pd.DataFrame, fills: pd.DataFrame, metrics: d
                         "foldFillsPerYear": [s["fillsPerYear"] for s in stats]}}
 
 
+FEE_KEYS = ("pct", "flatInr", "minInr")  # inside costs.brokerage
+CHARGE_KEYS = ("sttPct", "nseTxnPct", "ipftPct", "sebiPct", "stampBuyPct", "dpSellInr")  # taxes' base amounts scale; GST rates do not
+
+
+def apply_stress(risk: dict, stress: dict | None) -> dict:
+    """A copy of the risk config with the simulator's cost assumptions stressed: slippage x slippageMult, every fee and charge x chargesMult."""
+    if not stress:
+        return risk
+    out = {**risk, "costs": json.loads(json.dumps(risk["costs"]))}
+    c = out["costs"]
+    for b, v in c["slippageBpsPerSide"].items():
+        c["slippageBpsPerSide"][b] = v * stress.get("slippageMult", 1.0)
+    mult = stress.get("chargesMult", 1.0)
+    for k in FEE_KEYS:
+        c["brokerage"][k] = c["brokerage"][k] * mult
+    for k in CHARGE_KEYS:
+        c[k] = c[k] * mult
+    return out
+
+
+def window_stats(returns: pd.Series, spans: list, rf: float, days: int) -> dict | None:
+    """Compounded return and max drawdown over the days of a named stress window (its spans joined), None when under two days overlap."""
+    r = pd.concat([_slice(returns, a, b) for a, b in spans])
+    if len(r) < 2:
+        return None
+    p = api.perf(r, rf, days=days)
+    return {"days": len(r), "return": float((1 + r).prod() - 1), "maxDrawdown": p.get("maxDrawdown", 0.0), "spans": [list(x) for x in spans]}
+
+
+def regime_stats(returns: pd.Series, regime: pd.Series, rf: float, days: int) -> dict:
+    """Per regime (BULL, TREND, WEAK, BEAR, Unknown): share of days, annualised post-tax return and max drawdown of that regime's days joined."""
+    out = {}
+    reg = regime.reindex(returns.index)
+    for name, r in returns.groupby(reg):
+        p = api.perf(r, rf, days=days) if len(r) >= 2 else {}
+        out[str(name)] = {"share": len(r) / len(returns), "cagr": p.get("cagr"), "maxDrawdown": p.get("maxDrawdown")}
+    return out
+
+
+def fills_profile(fills: pd.DataFrame, nav: pd.Series) -> dict:
+    """Trade profile: fills per calendar year, turnover (traded value over mean NAV, per year), charges as a share of mean NAV per year, open names by month."""
+    if not len(fills):
+        return {"fillsPerYear": {}, "turnover": {}, "costDrag": {}, "names": {}}
+    f = fills.assign(year=fills.trade_date.str[:4], value=fills.qty * fills.price)
+    mean_nav = nav.groupby(nav.index.str[:4]).mean()
+    held, names = {}, {}
+    for d, side, t, q in zip(f.trade_date, f.side, f.ticker, f.qty):
+        held[t] = held.get(t, 0) + (q if side == "BUY" else -q)
+        names[d[:7]] = sum(v > 0 for v in held.values())
+    per = lambda col: {y: float(v / mean_nav.get(y, float("nan"))) for y, v in f.groupby("year")[col].sum().items() if y in mean_nav.index}  # noqa: E731
+    return {"fillsPerYear": {y: int(n) for y, n in f.groupby("year").size().items()}, "turnover": per("value"), "costDrag": per("charges"), "names": names}
+
+
 def feasible(constraints: dict) -> bool:
     return all(v <= 0 for v in constraints.values())
 
@@ -129,14 +183,46 @@ class BacktestRunner:
         self.haircut = settings["universe"]["writeOff"]
         self.days = self.w.risk["evaluator"].get("tradingDaysPerYear", 252)
         self.rf = self.w.risk["evaluator"]["riskFreeRatePct"]
+        self._alt: dict = {}  # stress worlds, built on first use
 
     def identity(self) -> dict:
         """What a cached result depends on besides the point: data, code, base configs, span, folds, write-off."""
         return {"dataHash": api.data_hash(self.w), "codeSha": api._code_sha(), "baseConfig": api.config_hash(self.w.cfg, self.w.risk, self.w.analyst),
                 "span": list(self.span), "folds": [list(f) for f in self.folds], "writeOff": self.haircut, "schemaVersion": self.space.version}
 
+    def world_for(self, stress: dict | None):
+        """The world a stressed run uses: the base one, a copy without a share of the names, or the other universe mode (built once, on demand)."""
+        stress = stress or {}
+        w = self.w
+        mode = stress.get("universe")
+        if mode and mode != self.cfg["universe"]["selection"]:
+            if mode not in self._alt:
+                self._alt[mode] = api.build_world({"universe": {"mode": mode}}, targets_cache_size=self.cfg["compute"]["targetsCache"])
+            w = self._alt[mode]
+        if stress.get("dropNames"):
+            key = (mode, stress["dropNames"], stress.get("seed", 1))
+            if key not in self._alt:
+                self._alt[key] = api.drop_names(w, stress["dropNames"], stress.get("seed", 1))
+            w = self._alt[key]
+        return w
+
+    def detail_of(self, ev, w) -> dict:
+        """Everything a candidate report draws, from one run: curves, regime and stress-window figures, the trade profile, vanished names."""
+        nav = ev.nav.set_index("date")
+        regime = nav.active_regime
+        windows = {n: window_stats(ev.returns, spans, self.rf, self.days) for n, spans in w.cfg["stress"].items()}
+        bench = pd.to_numeric(nav.bench_close, errors="coerce")
+        v = ev.result.vanished
+        return {"nav": ev.post_tax_nav, "bench": bench / bench.dropna().iloc[0] if bench.notna().any() else bench, "exposure": (pd.to_numeric(nav.positions_value) / pd.to_numeric(nav.nav)),
+                "rung": pd.to_numeric(nav.rung), "regime": regime, "regimes": regime_stats(ev.returns, regime, self.rf, self.days),
+                "stressWindows": {k: x for k, x in windows.items() if x}, "profile": fills_profile(ev.fills, ev.post_tax_nav),
+                "vanished": {"exits": len(v), "writtenOffInr": float(sum(x.get("writtenOffInr", 0.0) for x in v))},
+                "surveillanceModelled": bool(w.cfg["surv"]["proxy"]), "realism": dict(w.cfg["fill"]["realism"])}
+
     def run(self, job: dict) -> dict:
+        """job: {"values": point} plus optional "stress": {slippageMult, chargesMult, writeOff, dropNames, universe, seed} and "detail": True (curves and breakdowns), "noAbort": True (a baseline such as the live default is run to the end even when it never trades)."""
         t0 = time.time()
+        stress = job.get("stress")
         try:
             risk, analyst, full = self.space.decode(job["values"])
         except space_mod.InvalidPoint as e:
@@ -144,7 +230,9 @@ class BacktestRunner:
         else:
             self.windows.check_tuning(*self.span)
             try:
-                ev = api.evaluate_config(self.w, risk, analyst, *self.span, haircut=self.haircut, monitor=make_monitor(self.cfg["constraints"], self.days))
+                w = self.world_for(stress)
+                haircut = (stress or {}).get("writeOff", self.haircut)
+                ev = api.evaluate_config(w, apply_stress(risk, stress), analyst, *self.span, haircut=haircut, monitor=None if job.get("noAbort") else make_monitor(self.cfg["constraints"], self.days))
             except AbortRun as a:
                 out = placeholder("aborted", abortReason=a.reason, abortedAt=a.asof, depthAtAbort=a.depth)
             except Exception as e:  # noqa: BLE001  a crashed trial is recorded as FAIL, never retried silently
@@ -153,6 +241,8 @@ class BacktestRunner:
                 out = {"status": "ok", **score(ev.returns, ev.nav, ev.fills, ev.metrics, self.folds, self.cfg, self.rf, self.days), "returns": ev.returns, "attrs": {}}
                 share = ev.nav.active_regime.value_counts(normalize=True)
                 out["regimeShare"] = {k: float(share.get(k, 0.0)) for k in space_mod.REGIMES}
+                if job.get("detail"):
+                    out["detail"] = self.detail_of(ev, w)
                 if not finite(out):
                     out = {**placeholder("fail"), "error": "non-finite objective or constraint"}
         out["seconds"] = round(time.time() - t0, 2)

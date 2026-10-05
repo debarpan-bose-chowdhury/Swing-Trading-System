@@ -9,7 +9,9 @@ grid-based params.Schema. It is a thin wrapper over replay.simulate, tax.lots / 
 calls backtest.run.evaluate and trials.Session.evaluate make (both now call it), so their results are the same by construction.
 """
 
+import copy
 import hashlib
+import random
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -17,7 +19,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.risk import evaluator
-from backtest import config, params, replay, tax, world
+from backtest import config, params, replay, surv_proxy, tax, world
 from backtest.overfit import deflated_sharpe, pbo_cscv, sharpe  # noqa: F401  (re-exported for hpo/)
 from backtest.targets import TargetsCache
 from backtest.walkforward import HoldoutRead, Windows  # noqa: F401  (re-exported: the exception holdout_guard raises)
@@ -134,3 +136,30 @@ def point_key(point: dict) -> str:
 
 def trial_id(params_key: str, start: str, end: str, kind: str) -> str:
     return hashlib.sha256(f"{params_key}|{start}|{end}|{kind}".encode()).hexdigest()[:12]
+
+
+class _WithoutNames:
+    """A point-in-time membership with some tickers taken out (the robustness stress 'drop a share of the names')."""
+
+    def __init__(self, inner, drop: set):
+        self.inner, self.drop, self.names = inner, drop, inner.names
+
+    def at(self, asof: str) -> dict:
+        return {b: {s for s in ss if s not in self.drop} for b, ss in self.inner.at(asof).items()}
+
+    def hash_bytes(self) -> bytes:
+        return self.inner.hash_bytes() + ",".join(sorted(self.drop)).encode()
+
+
+def drop_names(w: World, share: float, seed: int) -> World:
+    """A copy of the world without a random `share` of its tickers (same data otherwise); the original is untouched."""
+    names = sorted(w.data.series)
+    drop = set(random.Random(seed).sample(names, round(share * len(names))))
+    data = copy.copy(w.data)
+    data.series = {k: v for k, v in w.data.series.items() if k not in drop}
+    data._static = {b: {s for s in ss if s not in drop} for b, ss in w.data._static.items()}
+    if w.data.membership is not None:
+        data.membership = _WithoutNames(w.data.membership, drop)
+    data._reindex()
+    from backtest.targets import Targets
+    return World(w.cfg, w.risk, w.analyst, data, Targets(data, w.analyst), w.dividends, surv_proxy.surveillance_for(data, w.cfg))

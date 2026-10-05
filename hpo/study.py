@@ -102,6 +102,16 @@ class Study:
             raise Refusal(f"study {name} was made with schema {doc['schemaVersion']}; the space is now {space.version}: start a new study")
         return cls(settings, space, {k: v for k, v in doc.items() if k != "schemaVersion"})
 
+    def records_ok(self) -> list[dict]:
+        """Simulated (not cached) scored trials: the rows of the return matrix."""
+        return [r for r in read_records(self.trials_path) if r["status"] == "ok" and not r["cacheHit"]]
+
+    def verify_inputs(self, pool) -> dict:
+        """The pool's data, code, configs and windows against the study's checkpoint (Refusal when they changed): robustness and gate runs must see what the study saw."""
+        ck, ident = read_json(self.checkpoint_path), pool.identity()
+        self._check_inputs(ck, ident)
+        return ident
+
     # --- the run -------------------------------------------------------------------------------------------------------------------
     def run(self, runner_factory, trials: int | None = None, workers: int | None = None, override_cap: str | None = None, out=None, bt_cfg: dict | None = None) -> dict:
         spec, cfg = self.spec, self.cfg
@@ -342,3 +352,13 @@ class Study:
 
 def load_spec_file(path: str | Path) -> dict:
     return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+
+
+def find_trial(settings: dict, trial_id: str) -> tuple[str, dict]:
+    """(study name, trials.jsonl record) of a trial id (the 12-character hash shown by `front` and `robust`) in any study."""
+    root = Path(settings["paths"]["data"]) / "studies"
+    for folder in sorted(root.glob("*")) if root.exists() else []:
+        for r in read_records(folder / "trials.jsonl"):
+            if r["trialId"] == trial_id and r["status"] == "ok" and not r["cacheHit"]:
+                return folder.name, r
+    raise Failed(f"no scored trial with id {trial_id} in any study under {root}")
