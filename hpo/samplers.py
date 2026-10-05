@@ -8,7 +8,7 @@ from pathlib import Path
 import optuna
 from optuna.distributions import FloatDistribution, IntDistribution
 from optuna.storages import JournalStorage
-from optuna.storages.journal import JournalFileBackend
+from optuna.storages.journal import JournalFileBackend, JournalFileOpenLock
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 warnings.filterwarnings("ignore", category=optuna.exceptions.ExperimentalWarning)  # QMCSampler is experimental; pinned, so no surprise
@@ -43,7 +43,8 @@ def make_sampler(kind: str, seed: int):
 
 
 def storage(journal: Path):
-    return JournalStorage(JournalFileBackend(str(journal)))
+    """The journal with Optuna's open-file lock: the default lock makes a symbolic link, which Windows refuses without an elevated privilege (WinError 1314)."""
+    return JournalStorage(JournalFileBackend(str(journal), lock_obj=JournalFileOpenLock(str(journal))))
 
 
 def open_study(name: str, journal: Path, sampler, create: bool):

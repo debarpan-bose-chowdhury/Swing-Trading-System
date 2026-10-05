@@ -233,9 +233,14 @@ def build_schema(register_path: str | Path, extra_path: str | Path, risk: dict, 
     names = [d.name for d in dims]
     if len(set(names)) != len(names):
         raise ValueError("schema: duplicate dimension names")
-    return {"schemaVersion": SCHEMA_VERSION, "registerSha": hashlib.sha256(Path(register_path).read_bytes()).hexdigest()[:16],
-            "extraSha": hashlib.sha256(Path(extra_path).read_bytes()).hexdigest()[:16], "settings": {"offsetShare": share},
+    return {"schemaVersion": SCHEMA_VERSION, "registerSha": _sha(register_path),
+            "extraSha": _sha(extra_path), "settings": {"offsetShare": share},
             "slowBounds": slow_bounds, "dims": [{k: v for k, v in asdict(d).items() if not (v is None or v == "" or (k == "log" and not v))} for d in dims]}
+
+
+def _sha(path: Path) -> str:
+    """Content hash that does not depend on the checkout's line endings (a Windows checkout may turn LF into CRLF)."""
+    return hashlib.sha256(Path(path).read_bytes().replace(b"\r\n", b"\n")).hexdigest()[:16]
 
 
 def write_schema(doc: dict, path: str | Path) -> None:

@@ -205,6 +205,25 @@ class GuardTests(StudyCase):
             self.new(name="v", active=["risk.sizing.cashBufferPct"])
 
 
+class WindowsTests(StudyCase):
+    def test_the_journal_never_needs_a_symbolic_link(self):
+        """Windows refuses os.symlink without an elevated privilege (WinError 1314); Optuna's default journal lock is a symlink, so the adapter uses the open-file lock."""
+        with patch("os.symlink", side_effect=OSError(1314, "A required privilege is not held by the client")):
+            st = self.new(trials=4)
+            self.assertEqual(self.run_study(st)["done"], 4)
+            self.assertEqual(self.run_study(Study.open(self.cfg, self.sp, "t1"), trials=6)["done"], 6)
+        self.assertFalse(list(st.dir.glob("*.lock*")))  # no stale journal lock is left behind
+
+    def test_the_schema_check_does_not_depend_on_line_endings(self):
+        from hpo import space as space_mod
+        for ending in (b"\n", b"\r\n"):
+            reg, extra = self.tmp / "r.csv", self.tmp / "e.json"
+            reg.write_bytes((REPO / "doc/parameter_register.csv").read_bytes().replace(b"\r\n", b"\n").replace(b"\n", ending))
+            extra.write_bytes((REPO / "hpo/config/space_extra.json").read_bytes().replace(b"\r\n", b"\n").replace(b"\n", ending))
+            doc = space_mod.build_schema(reg, extra, self.risk, self.analyst, self.cfg0["space"])
+            self.assertEqual(doc, self.sp.schema)
+
+
 class PoolTests(StudyCase):
     def test_a_spawn_pool_of_two_workers_finishes_and_leaves_no_lock(self):
         st = self.new(trials=8)
