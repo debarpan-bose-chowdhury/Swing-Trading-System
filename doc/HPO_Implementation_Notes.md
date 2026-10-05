@@ -16,7 +16,7 @@ Built from `doc/HPO_TDD.md`. This records what was decided while reading the TDD
 - Trials that cannot be scored (rejected point, aborted run) carry placeholder objectives (-100% CAGR, 100% depth) and a violated constraint; they are never read as performance and are greyed in reports.
 - PED-ANOVA importances are re-normalised to shares; Morris/Sobol indices are not implemented (Spearman is the cross-check).
 - Charts: Plotly bundled inline; a per-chart SVG export is the Plotly toolbar button, not a file written next to the report (no server-side image engine).
-- Resume refuses on a changed `code_sha`, so any commit during a long study needs a new study (as the TDD says).
+- Resume refuses on a changed `code_sha` (as the TDD says), which includes any `git pull`; `study run --accept-code-change "reason"` continues the study when only the commit changed (logged in checkpoint.json; changed data, configs, windows or schema are never accepted).
 - Not run here: the sandbox has no `app/data`, so engine tests use the synthetic world and real timing/Stage 0 runs happen on your PC.
 
 ## Phase 3 (samplers, constraints, front, stages)

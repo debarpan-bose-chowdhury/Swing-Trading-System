@@ -2,7 +2,7 @@
 
   --check                         validate hpo.json, the schema and the imports (no network, no writes)
   space build|check|show [--stage N]
-  study new --config F | run --name N [--trials T] [--workers W] [--override-cap "reason"] | resume --name N | status --name N
+  study new --config F | diagnose --name N (why trials are infeasible) | run --name N [--trials T] [--workers W] [--override-cap "reason"] | resume --name N | status --name N
   sensitivity --name N            importance and the freeze list (writes sensitivity.json and proposed_active.yaml in the study folder)
   report --name N | --candidate ID [--open]   HTML study report or candidate report;  live --name N  auto-refreshing dashboard while a study runs
   ledger show
@@ -83,6 +83,14 @@ def cmd_study(a, cfg) -> int:
         for n in st.spec["unfrozen"]:
             print(f"  WARNING frozen-class parameter searched: {n}")
         return 0
+    if a.action == "diagnose":
+        recs = study_mod.read_records(Path(cfg["paths"]["data"]) / "studies" / a.name / "trials.jsonl")
+        d = study_mod.diagnose(recs, cfg)
+        e = d["ended"]
+        print(f"{d['trials']} trials: {e['ok']} scored, {e['aborted']} aborted {d['abortReasons'] or ''}, {e['invalid']} invalid, {e['fail']} failed; {d['feasible']} feasible")
+        print(_table([{"constraint": r["constraint"], "broken by": f"{r['violated']} of {d['scored']}", "limit": r["limit"], "best reached": r["best"] if r["best"] is not None else "-", "meaning": r["what"]} for r in d["constraints"]],
+                     ["constraint", "broken by", "limit", "best reached", "meaning"]))
+        return 0
     if a.action == "status":
         s = read_json(Path(cfg["paths"]["data"]) / "studies" / a.name / "status.json")
         if s is None:
@@ -93,7 +101,7 @@ def cmd_study(a, cfg) -> int:
         return 0
     st = study_mod.Study.open(cfg, sp, a.name)
     factory = functools.partial(objective.BacktestRunner, cfg)
-    res = st.run(factory, trials=getattr(a, "trials", None), workers=getattr(a, "workers", None), override_cap=getattr(a, "override_cap", None), bt_cfg=bt)
+    res = st.run(factory, trials=getattr(a, "trials", None), workers=getattr(a, "workers", None), override_cap=getattr(a, "override_cap", None), bt_cfg=bt, accept_code_change=getattr(a, "accept_code_change", None))
     return 0 if res["state"] in ("finished", "stopped") else 1
 
 
@@ -315,8 +323,10 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("--trials", type=int)
     r.add_argument("--workers", type=int)
     r.add_argument("--override-cap", dest="override_cap")
+    r.add_argument("--accept-code-change", dest="accept_code_change")
     ssub.add_parser("resume").add_argument("--name", required=True)
     ssub.add_parser("status").add_argument("--name", required=True)
+    ssub.add_parser("diagnose").add_argument("--name", required=True)
     sub.add_parser("sensitivity").add_argument("--name", required=True)
     fr = sub.add_parser("front")
     fr.add_argument("--name", required=True)
@@ -376,7 +386,7 @@ def main(argv: list[str] | None = None) -> int:
             parser().print_help()
             return 1
         if a.cmd == "study" and a.action == "resume":
-            a.trials = a.workers = a.override_cap = None
+            a.trials = a.workers = a.override_cap = a.accept_code_change = None
             a.action = "run"
         return handler(a, cfg)
     except Busy as e:

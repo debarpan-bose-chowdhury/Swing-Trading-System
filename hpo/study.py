@@ -118,21 +118,22 @@ class Study:
         return ident
 
     # --- the run -------------------------------------------------------------------------------------------------------------------
-    def run(self, runner_factory, trials: int | None = None, workers: int | None = None, override_cap: str | None = None, out=None, bt_cfg: dict | None = None) -> dict:
+    def run(self, runner_factory, trials: int | None = None, workers: int | None = None, override_cap: str | None = None, out=None, bt_cfg: dict | None = None,
+            accept_code_change: str | None = None) -> dict:
         spec, cfg = self.spec, self.cfg
         target, workers = trials or spec["trials"], workers or cfg["compute"]["workers"]
         with RunLock(self.dir / "run.lock", cfg["compute"]["lockStaleHours"]):
             pool = EvalPool(runner_factory, workers)
             try:
-                return self._run(pool, target, workers, override_cap, out or sys.stderr, bt_cfg)
+                return self._run(pool, target, workers, override_cap, out or sys.stderr, bt_cfg, accept_code_change)
             finally:
                 pool.close()
 
-    def _run(self, pool: EvalPool, target: int, workers: int, override_cap: str | None, out, bt_cfg: dict | None) -> dict:
+    def _run(self, pool: EvalPool, target: int, workers: int, override_cap: str | None, out, bt_cfg: dict | None, accept_code_change: str | None = None) -> dict:
         spec, cfg, space = self.spec, self.cfg, self.space
         ck = read_json(self.checkpoint_path)
         identity = pool.identity()
-        self._check_inputs(ck, identity)
+        self._check_inputs(ck, identity, accept_code_change)
         self.identity, self.bt_cfg = identity, bt_cfg
         self.records = read_records(self.trials_path)
         self.cache = {r["pointKey"]: r for r in self.records if r["status"] in ("ok", "aborted", "invalid") and not r.get("cacheHit")}
@@ -186,15 +187,20 @@ class Study:
             prog.update(st, final=True)
         return st
 
-    def _check_inputs(self, ck: dict, identity: dict) -> None:
+    def _check_inputs(self, ck: dict, identity: dict, accept_code_change: str | None = None) -> None:
         if ck["specHash"] != spec_hash(self.spec):
             raise Refusal("the study file changed since `study new`: start a new study")
         if ck["identity"] is None:
             ck["identity"] = {k: identity[k] for k in IDENTITY_KEYS}
         else:
             changed = [k for k in IDENTITY_KEYS if ck["identity"].get(k) != identity[k]]
+            if changed == ["codeSha"] and accept_code_change:  # a new commit with the same data, configs, windows and schema: allowed only when asked for, and logged
+                ck.setdefault("codeChanges", []).append({"from": ck["identity"]["codeSha"], "to": identity["codeSha"], "reason": accept_code_change, "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+                ck["identity"]["codeSha"] = identity["codeSha"]
+                changed = []
             if changed:
-                raise Refusal(f"inputs changed since the study started ({', '.join(changed)}): its trials are no longer comparable; start a new study")
+                hint = " (the commit changed, for example after a git pull: if the simulator is untouched, `--accept-code-change \"reason\"` continues the study and logs it)" if changed == ["codeSha"] else ""
+                raise Refusal(f"inputs changed since the study started ({', '.join(changed)}): its trials are no longer comparable; start a new study{hint}")
         if ck.get("optuna") != samplers.optuna.__version__:
             print(f"warning: Optuna was {ck.get('optuna')} when this study started, now {samplers.optuna.__version__}", file=sys.stderr)
             ck["optuna"] = samplers.optuna.__version__
@@ -367,3 +373,23 @@ def find_trial(settings: dict, trial_id: str) -> tuple[str, dict]:
             if r["trialId"] == trial_id and r["status"] == "ok" and not r["cacheHit"]:
                 return folder.name, r
     raise Failed(f"no scored trial with id {trial_id} in any study under {root}")
+
+
+def diagnose(records: list[dict], cfg: dict) -> dict:
+    """Why trials are infeasible: how the trials ended, and for each constraint how many scored trials broke it and the best value any of them reached."""
+    ok = [r for r in records if r["status"] == "ok"]
+    c = cfg["constraints"]
+    ended = {k: sum(r["status"] == k for r in records) for k in ("ok", "aborted", "invalid", "fail")}
+    reasons: dict = {}
+    for r in records:
+        if r["status"] == "aborted":
+            reasons[r["attrs"].get("abortReason", "?")] = reasons.get(r["attrs"].get("abortReason", "?"), 0) + 1
+    per_year = [min(r["metrics"].get("foldFillsPerYear") or [0.0]) for r in ok]
+    rows = [
+        {"constraint": "min_fills", "limit": c["minFills"], "best": max((r["metrics"].get("fills", 0) for r in ok), default=None), "what": "fills over the whole run (more is better)", "key": "min_fills"},
+        {"constraint": "fills_per_fold_year", "limit": c["minFillsPerFoldYear"], "best": max(per_year, default=None), "what": "fills per year in the worst fold (more is better)", "key": "fills_per_fold_year"},
+        {"constraint": "min_exposure", "limit": c["minAvgExposure"], "best": max((r["metrics"].get("avgExposure", 0.0) for r in ok), default=None), "what": "average gross exposure (more is better)", "key": "min_exposure"},
+        {"constraint": "dd_cap", "limit": -c["maxDrawdown"], "best": min((-r["metrics"].get("maxDrawdown", 0.0) for r in ok), default=None), "what": "max drawdown depth (less is better)", "key": "dd_cap"}]
+    for row in rows:
+        row["violated"] = sum(r["constraints"][row["key"]] > 0 for r in ok)
+    return {"trials": len(records), "ended": ended, "abortReasons": reasons, "scored": len(ok), "feasible": sum(r["feasible"] for r in records), "constraints": rows}

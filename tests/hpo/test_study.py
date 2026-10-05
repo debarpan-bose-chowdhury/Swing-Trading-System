@@ -196,6 +196,27 @@ class GuardTests(StudyCase):
         with self.assertRaisesRegex(Refusal, "dataHash"):
             self.run_study(Study.open(self.cfg, self.sp, "t1"), Other)
 
+    def test_a_new_commit_can_be_accepted_on_request_and_is_logged_but_changed_data_never_can(self):
+        st = self.new()
+        self.run_study(st, trials=4)
+
+        class NewCommit(FakeRunner):
+            def identity(self):
+                return {**super().identity(), "codeSha": "code1"}
+
+        class NewData(NewCommit):
+            def identity(self):
+                return {**super().identity(), "dataHash": "data1"}
+
+        with self.assertRaisesRegex(Refusal, "accept-code-change"):
+            self.run_study(Study.open(self.cfg, self.sp, "t1"), NewCommit)
+        self.assertEqual(self.run_study(Study.open(self.cfg, self.sp, "t1"), NewCommit, trials=6, accept_code_change="pulled a tooling fix")["done"], 6)
+        ck = json.loads((st.dir / "checkpoint.json").read_text())
+        self.assertEqual((ck["codeChanges"][0]["from"], ck["codeChanges"][0]["to"], ck["codeChanges"][0]["reason"]), ("code0", "code1", "pulled a tooling fix"))
+        self.assertEqual(self.run_study(Study.open(self.cfg, self.sp, "t1"), NewCommit, trials=8)["done"], 8)  # the new commit is now the study's own
+        with self.assertRaisesRegex(Refusal, "dataHash"):
+            self.run_study(Study.open(self.cfg, self.sp, "t1"), NewData, accept_code_change="x")
+
     def test_a_changed_study_file_cannot_resume(self):
         st = self.new()
         doc = json.loads((st.dir / "study.json").read_text())
@@ -209,6 +230,26 @@ class GuardTests(StudyCase):
         self.assertEqual(st.spec["unfrozen"], ["risk.sizing.cashBufferPct"])
         with self.assertRaisesRegex(Failed, "no active parameter"):
             self.new(name="v", active=["risk.sizing.cashBufferPct"])
+
+
+class DiagnoseTests(StudyCase):
+    def test_it_names_the_constraint_that_blocks_every_trial_and_the_best_value_reached(self):
+        from hpo.study import diagnose
+        st = self.new(trials=10)
+        self.run_study(st)
+        d = diagnose(read_records(st.trials_path), self.cfg)
+        self.assertEqual((d["trials"], d["scored"], d["ended"]["ok"]), (10, 10, 10))
+        by = {r["constraint"]: r for r in d["constraints"]}
+        self.assertEqual(set(by), {"min_fills", "fills_per_fold_year", "min_exposure", "dd_cap"})
+        self.assertEqual(by["min_fills"]["limit"], 300)
+        self.assertLessEqual(by["min_fills"]["best"], 400)
+        self.assertEqual(by["min_exposure"]["violated"], 0)  # the fake runner holds 70% exposure
+        recs = [{"status": "ok", "feasible": False, "constraints": {"min_fills": 100, "fills_per_fold_year": 0, "min_exposure": 0.1, "dd_cap": -0.1}, "metrics": {"fills": 200, "avgExposure": 0.3, "maxDrawdown": -0.2,
+                                                                                                                                                 "foldFillsPerYear": [20, 9]}, "attrs": {}},
+                {"status": "aborted", "feasible": False, "constraints": {}, "metrics": {}, "attrs": {"abortReason": "no fills"}}]
+        d2 = diagnose(recs, self.cfg)
+        by2 = {r["constraint"]: r for r in d2["constraints"]}
+        self.assertEqual((d2["abortReasons"], by2["min_fills"]["violated"], by2["min_fills"]["best"], by2["fills_per_fold_year"]["best"], by2["min_exposure"]["best"]), ({"no fills": 1}, 1, 200, 9, 0.3))
 
 
 class WindowsTests(StudyCase):
