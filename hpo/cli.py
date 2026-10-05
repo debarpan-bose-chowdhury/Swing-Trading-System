@@ -10,7 +10,9 @@
   stages plan|advise --name N     B-block study files from a screen; the B-to-C switch advice (GP refinement file)
   robust --name N [--top 30]      neighbourhood-score the finalists (plateau, not peak); writes robust.json, prints the pick or 'keep defaults'
   gate --candidate ID             full evidence (stress, neighbours, grid, PBO/DSR/SPA, exploit audit) and the verdict; candidates/<id>/report.html (charts 11-24); exit 3 when not met
-  holdout, promote: later phases (they exit 1 with a message until built)
+  holdout --candidate ID          the one-shot holdout (once, for one parameter set, against the criterion registered at gate time; exit 3 if refused or not passed)
+  promote --candidate ID          overlay.json, rollback.json, diff.md, dossier for a candidate that passed gate, audit and holdout (never writes app/config)
+  shadow check --candidate ID [--nav CSV] [--since DATE]   the 13-week shadow comparison against the limits in the dossier (exit 3 = roll back)
 """
 
 import argparse
@@ -24,12 +26,12 @@ from pathlib import Path
 import yaml
 
 from hpo import ledger as ledger_mod
-from hpo import gate as gate_mod, objective, pareto, robust as robust_mod, sensitivity, settings, stages, space as space_mod, study as study_mod
+from hpo import gate as gate_mod, holdout as holdout_mod, objective, promote as promote_mod, shadow as shadow_mod, pareto, robust as robust_mod, sensitivity, settings, stages, space as space_mod, study as study_mod
 from hpo.errors import Busy, Failed, Refusal
 from hpo.evalpool import EvalPool
 from hpo.status import RunLock, read_json, write_json
 
-LATER = {"holdout": 5, "promote": 5}
+LATER = {}
 
 
 def _space(cfg: dict):
@@ -184,7 +186,7 @@ def cmd_gate(a, cfg) -> int:
             pool.close()
     verdict, aud = gate_mod.checks(ev, cfg), None
     aud = gate_mod.audit(ev, cfg)
-    gate_mod.save(folder, ev, verdict, aud)
+    gate_mod.save(folder, ev, verdict, aud, cfg)
     from hpo.viz import candidate
     candidate.candidate_report(folder, cfg)
     for k, v in verdict["checks"].items():
@@ -194,6 +196,60 @@ def cmd_gate(a, cfg) -> int:
         print(f"label: {verdict['label']}")
     print(f"gate {'passed' if verdict['passed'] else 'NOT met: ' + ', '.join(verdict['failed'])}; report {folder / 'report.html'}")
     return 0 if verdict["passed"] else 3
+
+
+def cmd_holdout(a, cfg) -> int:
+    _, sp = _space(cfg)
+    name, rec = study_mod.find_trial(cfg, a.candidate)
+    st = study_mod.Study.open(cfg, sp, name)
+    pool = _pool(cfg, 1)
+    try:
+        st.verify_inputs(pool)
+        res = holdout_mod.score(st, pool, cfg, a.candidate, rec)
+    finally:
+        pool.close()
+    print(f"holdout {res['window'][0]} to {res['window'][1]} (scored once): {'PASSED' if res['passed'] else 'NOT passed'}")
+    for k, v in res["checks"].items():
+        print(f"  {'pass' if v['passed'] else 'FAIL'}  {k}: {v['value']} against {v['limit']}")
+    return 0 if res["passed"] else 3
+
+
+def cmd_promote(a, cfg) -> int:
+    _, sp = _space(cfg)
+    name, rec = study_mod.find_trial(cfg, a.candidate)
+    st = study_mod.Study.open(cfg, sp, name)
+    folder = Path(cfg["paths"]["data"]) / "candidates" / a.candidate
+    promote_mod.build(st, folder, cfg, cfg["paths"]["register"])
+    print(f"promotable: wrote overlay.json, rollback.json, diff.md, dossier.md/json in {folder}")
+    print("apply overlay.json to app/config by hand, bump config_version in your changelog, then run the 13-week shadow period: `shadow check --candidate " + a.candidate + "`")
+    return 0
+
+
+def cmd_shadow(a, cfg) -> int:
+    import pandas as pd
+    _, sp = _space(cfg)
+    name, rec = study_mod.find_trial(cfg, a.candidate)
+    st = study_mod.Study.open(cfg, sp, name)
+    folder = Path(cfg["paths"]["data"]) / "candidates" / a.candidate
+    dossier = read_json(folder / "dossier.json")
+    if dossier is None:
+        raise Refusal(f"{a.candidate} was not promoted (no dossier): the shadow limits are fixed by `promote`")
+    nav = pd.read_csv(a.nav or "app/data/risk/nav/nav_shadow.csv", dtype={"date": str})
+    realised = pd.to_numeric(nav.set_index("date").twr_index)
+    pool = _pool(cfg, 1)
+    try:
+        st.verify_inputs(pool)
+        rep = pool.submit({"replay": True, "values": st.space.complete(rec["values"]), "start": a.since or realised.index[0], "end": None}).result()
+    finally:
+        pool.close()
+    table = shadow_mod.tracking(realised, rep["twr"])
+    sh = dossier["shadow"]
+    v = shadow_mod.verdict(table, sh["trackingGapPp"], sh["drawdownRollbackDepth"], sh["weeks"])
+    write_json(folder / "shadow.json", {**v, "asOf": str(realised.index[-1]), "bandPp": sh["trackingGapPp"], "table": table.astype({"date": str}).to_dict("records")})
+    print(f"shadow {v['status']}: week {v['weeks']} of {sh['weeks']}" + (f", gap {v['gapPp']:+.2f} pp (worst {v['worstGapPp']:.2f}), depth {v['depth']:.1%} (line {v['p95Depth']:.1%})" if v["weeks"] else ""))
+    for r in v.get("reasons", []):
+        print(f"  ROLL BACK: {r}")
+    return 3 if v["status"] == "rollback" else 0
 
 
 def cmd_report(a, cfg) -> int:
@@ -267,6 +323,13 @@ def parser() -> argparse.ArgumentParser:
     gt = sub.add_parser("gate")
     gt.add_argument("--candidate", required=True)
     gt.add_argument("--workers", type=int)
+    for name in ("holdout", "promote"):
+        sub.add_parser(name).add_argument("--candidate", required=True)
+    sh = sub.add_parser("shadow")
+    sh.add_argument("action", choices=["check"])
+    sh.add_argument("--candidate", required=True)
+    sh.add_argument("--nav")
+    sh.add_argument("--since")
     sg = sub.add_parser("stages")
     sg.add_argument("action", choices=["plan", "advise"])
     sg.add_argument("--name", required=True)
@@ -303,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.cmd in LATER:
             print(f"`{a.cmd}` arrives in phase {LATER[a.cmd]} of doc/HPO_TDD.md")
             return 1
-        handler = {"space": cmd_space, "study": cmd_study, "sensitivity": cmd_sensitivity, "front": cmd_front, "stages": cmd_stages, "robust": cmd_robust, "gate": cmd_gate, "report": cmd_report, "live": cmd_live, "ledger": cmd_ledger}.get(a.cmd)
+        handler = {"space": cmd_space, "study": cmd_study, "sensitivity": cmd_sensitivity, "front": cmd_front, "stages": cmd_stages, "robust": cmd_robust, "gate": cmd_gate, "holdout": cmd_holdout, "promote": cmd_promote, "shadow": cmd_shadow, "report": cmd_report, "live": cmd_live, "ledger": cmd_ledger}.get(a.cmd)
         if handler is None:
             parser().print_help()
             return 1

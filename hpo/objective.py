@@ -219,8 +219,32 @@ class BacktestRunner:
                 "vanished": {"exits": len(v), "writtenOffInr": float(sum(x.get("writtenOffInr", 0.0) for x in v))},
                 "surveillanceModelled": bool(w.cfg["surv"]["proxy"]), "realism": dict(w.cfg["fill"]["realism"])}
 
+    def run_holdout(self, job: dict) -> dict:
+        """The one-shot holdout: the guard (marker file) is taken before anything is simulated, so a crash still uses the look. The candidate and the live default
+        (a reference, not a selection) are run over the holdout window from flat, with no abort rule."""
+        from pathlib import Path
+        start, end = api.holdout_guard(self.windows, Path(job["marker"]), job["paramsKey"])
+        out = {"window": [start, end]}
+        for who, values in (("candidate", job["values"]), ("default", job["default"])):
+            risk, analyst, _ = self.space.decode(values)
+            ev = api.evaluate_config(self.w, risk, analyst, start, end, haircut=self.haircut)
+            out[who] = {"metrics": ev.metrics, "fills": int(len(ev.fills)), "years": len(ev.returns) / self.days, "returns": ev.returns,
+                        "depth": -float(ev.metrics.get("maxDrawdown", 0.0))}
+        return out
+
+    def run_replay(self, job: dict) -> dict:
+        """A replay of one configuration over [start, end] (the shadow-period comparison): its TWR index and drawdown, pre-tax like the shadow portfolio."""
+        risk, analyst, _ = self.space.decode(job["values"])
+        ev = api.evaluate_config(self.w, risk, analyst, job["start"], job.get("end"), haircut=self.haircut)
+        nav = ev.nav.set_index("date")
+        return {"twr": pd.to_numeric(nav.twr_index), "metrics": ev.metrics, "fills": int(len(ev.fills))}
+
     def run(self, job: dict) -> dict:
         """job: {"values": point} plus optional "stress": {slippageMult, chargesMult, writeOff, dropNames, universe, seed} and "detail": True (curves and breakdowns), "noAbort": True (a baseline such as the live default is run to the end even when it never trades)."""
+        if job.get("holdout"):
+            return self.run_holdout(job)
+        if job.get("replay"):
+            return self.run_replay(job)
         t0 = time.time()
         stress = job.get("stress")
         try:

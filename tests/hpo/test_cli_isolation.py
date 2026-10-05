@@ -58,10 +58,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("risk.sizing.minNewOrderInr", out)
 
-    def test_later_phase_commands_say_so_and_fail(self):
-        code, out, _ = self.run_cli("promote")
-        self.assertEqual(code, 1)
-        self.assertIn("phase 5", out)
+    def test_commands_on_an_unknown_candidate_fail_cleanly(self):
+        for cmd in ("promote", "holdout", "gate"):
+            self.assertEqual(self.run_cli(cmd, "--candidate", "000000000000")[0], 1, cmd)
 
     def test_domain_errors_map_to_exit_codes(self):
         for exc, code in ((Busy("x"), 2), (Refusal("x"), 3), (Failed("x"), 1)):

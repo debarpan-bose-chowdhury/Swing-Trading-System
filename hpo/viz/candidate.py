@@ -210,23 +210,44 @@ def c23(ev, cfg):
                         fig, ["parameter", "class", "live", "candidate", "low", "high"], [[x["name"], x["class"], x["old"], x["new"], x["low"], x["high"]] for x in d])
 
 
-def c24(cfg):
-    return charts.chart("c24", "Holdout and shadow", "The last two years stay locked until the one-shot holdout is scored; the 13-week shadow period starts only after promotion. Neither has happened for this candidate.",
-                        f"Holdout: pre-registered pass criterion. Shadow: cumulative tracking gap within +-{cfg['shadow']['trackingGapPp']} pp over {cfg['shadow']['weeks']} weeks.", None, ["stage", "status"],
-                        [["holdout", "locked: not scored (promotion phase)"], ["shadow", f"not started ({cfg['shadow']['weeks']} weekly rebalances, gap band +-{cfg['shadow']['trackingGapPp']} pp)"]])
+def c24(cfg, folder: Path):
+    """Holdout and shadow. Before the one-shot holdout is scored this is a locked placeholder with no holdout data; after, the result is drawn once against its criterion."""
+    hold = json.loads((folder / "holdout.json").read_text(encoding="utf-8")) if (folder / "holdout.json").exists() else None
+    shadow = json.loads((folder / "shadow.json").read_text(encoding="utf-8")) if (folder / "shadow.json").exists() else None
+    crit = f"Holdout: pre-registered pass criterion. Shadow: cumulative tracking gap within +-{cfg['shadow']['trackingGapPp']} pp over {cfg['shadow']['weeks']} weeks."
+    how = "The last two years stay locked until the one-shot holdout is scored; the 13-week shadow period starts only after promotion."
+    if not hold or hold.get("status") != "scored":
+        return charts.chart("c24", "Holdout and shadow", how + " Neither has happened for this candidate.", crit, None, ["stage", "status"],
+                            [["holdout", "locked: not scored (one look, after the gate and a clean audit)"], ["shadow", f"not started ({cfg['shadow']['weeks']} weekly rebalances, gap band +-{cfg['shadow']['trackingGapPp']} pp)"]])
+    names = ["CAGR (%)", "drawdown depth (%)"]
+    cand, dflt = hold["candidate"], hold["default"]
+    data = [{"type": "bar", "name": "candidate", "x": names, "y": [_pct(cand["metrics"].get("cagr")), _pct(cand["depth"])], "marker": {"color": C}},
+            {"type": "bar", "name": "live default", "x": names, "y": [_pct(dflt["metrics"].get("cagr")), _pct(dflt["depth"])], "marker": {"color": D}}]
+    rows = [[k, v["value"], v["limit"], "pass" if v["passed"] else "FAIL"] for k, v in hold["checks"].items()]
+    layout = {"barmode": "group", "yaxis": {"title": {"text": f"holdout {hold['window'][0]} to {hold['window'][1]} (%)"}}}
+    note = f"Holdout scored once: {'passed' if hold['passed'] else 'NOT passed'}. With about two years the standard error of a Sharpe ratio is about 0.85: this detects catastrophic failure only."
+    if shadow and shadow.get("table"):
+        t = shadow["table"]
+        data += [{"type": "scatter", "mode": "lines+markers", "name": "shadow tracking gap (pp)", "x": [r["date"] for r in t], "y": [r["gapPp"] for r in t], "xaxis": "x2", "yaxis": "y2", "line": {"color": "role:front"}}]
+        band = shadow["bandPp"]
+        layout.update({"xaxis": {"domain": [0, 0.4]}, "xaxis2": {"domain": [0.55, 1], "anchor": "y2", "title": {"text": "week"}}, "yaxis2": {"anchor": "x2", "title": {"text": "gap, pp"}},
+                       "shapes": [{"type": "rect", "xref": "x2 domain", "yref": "y2", "x0": 0, "x1": 1, "y0": -band, "y1": band, "fillcolor": "role:good", "opacity": 0.15, "line": {"width": 0}}]})
+        rows += [["shadow", shadow["status"], f"week {shadow['weeks']} of {shadow['of']}", f"gap {shadow.get('gapPp', 0):+.2f} pp"]]
+        note += f" Shadow: {shadow['status']}."
+    return charts.chart("c24", "Holdout and shadow", how, crit, {"data": data, "layout": layout}, ["check", "value", "limit", "result"], rows, note)
 
 
-def candidate_charts(ev: dict, verdict: dict, series: pd.DataFrame, cfg: dict) -> list[dict]:
+def candidate_charts(ev: dict, verdict: dict, series: pd.DataFrame, cfg: dict, folder: Path) -> list[dict]:
     aud = verdict["audit"]
     return [c11(ev, series), c12(ev, series), c13(ev, cfg), c14(ev, cfg), c15(ev, cfg), c16(ev, cfg), c17(ev, cfg), c18(ev, cfg), c19(ev, cfg), c20(ev, cfg), c21(ev, series),
-            c22(ev, aud, cfg), c23(ev, cfg), c24(cfg)]
+            c22(ev, aud, cfg), c23(ev, cfg), c24(cfg, folder)]
 
 
 def candidate_report(folder: Path, cfg: dict) -> Path:
     ev = json.loads((folder / "evidence.json").read_text(encoding="utf-8"))
     verdict = json.loads((folder / "gate.json").read_text(encoding="utf-8"))
     series = pd.read_parquet(folder / "series.parquet")
-    cs = charts.clean_all(candidate_charts(ev, verdict, series, cfg))
+    cs = charts.clean_all(candidate_charts(ev, verdict, series, cfg, folder))
     c = verdict["checks"]
     tiles = [{"label": "gate", "value": "passed" if verdict["passed"] else "not met"}, {"label": "deflated Sharpe (N / 2N)", "value": f"{c['deflatedSharpe']['value']:.2f} / {c['deflatedSharpe']['at2N']:.2f}"},
              {"label": "PBO", "value": f"{c['pbo']['value']:.2f}"}, {"label": "SPA p vs default", "value": f"{c['spa']['p']:.3f}"}, {"label": "neighbours within tolerance", "value": f"{c['neighbourhood']['share']:.0%}"},

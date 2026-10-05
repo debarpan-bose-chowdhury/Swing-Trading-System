@@ -37,13 +37,39 @@ class FakeRunner:
     """Maps a point to an outcome with no engine: score from `landscape`, returns a seeded noise series that follows the score,
     infeasible (min_fills) above minNewOrderInr 12000, a FAIL when `failing` says so. Picklable, so it also runs in a spawn pool."""
 
-    def __init__(self, fail_if=None, boom_on_run: int | None = None):
+    def __init__(self, fail_if=None, boom_on_run: int | None = None, holdout_cagr: float = 0.08, holdout_error: bool = False):
         self.fail_if, self.boom_on_run, self.calls = fail_if, boom_on_run, 0
+        self.holdout_cagr, self.holdout_error = holdout_cagr, holdout_error
 
     def identity(self) -> dict:
         return {"dataHash": "data0", "codeSha": "code0", "baseConfig": "base0", "span": [DAYS[0], DAYS[799]], "folds": [list(f) for f in FOLDS], "writeOff": 0.5, "schemaVersion": "1.0.0"}
 
+    def run_holdout(self, job: dict) -> dict:
+        """The holdout door as the real one behaves: the marker is taken first; another parameter set raises HoldoutRead."""
+        from backtest import api
+        marker = Path(job["marker"])
+        if marker.exists() and json.loads(marker.read_text())["params"] != job["paramsKey"]:
+            raise api.HoldoutRead("the holdout was already scored for another parameter set")
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(json.dumps({"params": job["paramsKey"]}))
+        if self.holdout_error:
+            raise RuntimeError("engine fell over after the look")
+        days = [d.strftime("%Y-%m-%d") for d in pd.bdate_range("2024-01-02", periods=500)]
+
+        def side(cagr, depth):
+            r = pd.Series(np.full(500, (1 + cagr) ** (1 / 252) - 1), index=days)
+            return {"metrics": {"cagr": cagr, "maxDrawdown": -depth, "sharpe": 1.0}, "fills": 50, "years": 500 / 252, "returns": r, "depth": depth}
+        return {"window": [days[0], days[-1]], "candidate": side(self.holdout_cagr, 0.08), "default": side(0.0, 0.0)}
+
+    def run_replay(self, job: dict) -> dict:
+        days = [d.strftime("%Y-%m-%d") for d in pd.bdate_range("2026-01-05", periods=70)]
+        return {"twr": pd.Series(np.cumprod(np.full(70, 1.0005)) * 100, index=days), "metrics": {}, "fills": 3}
+
     def run(self, job: dict) -> dict:
+        if job.get("holdout"):
+            return self.run_holdout(job)
+        if job.get("replay"):
+            return self.run_replay(job)
         self.calls += 1
         if self.boom_on_run is not None and self.calls == self.boom_on_run:
             raise KeyboardInterrupt  # a kill in the middle of a trial

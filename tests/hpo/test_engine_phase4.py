@@ -55,5 +55,28 @@ class EngineStressTests(EngineCase):
         self.assertEqual((out["status"], out["metrics"]["fills"]), ("ok", 0))
 
 
+class EngineHoldoutTests(EngineCase):
+    def job(self, key, marker):
+        return {"holdout": True, "values": self.runner.space.defaults, "default": self.runner.space.defaults, "marker": str(marker), "paramsKey": key}
+
+    def test_the_real_holdout_door_runs_the_holdout_window_once_for_one_set(self):
+        from pathlib import Path
+        marker = Path(self.root) / "hold" / "holdout.marker"
+        out = self.runner.run(self.job("setA", marker))
+        self.assertEqual(out["window"], [self.win.holdout_start, self.win.last])
+        self.assertGreater(self.win.holdout_start, self.runner.span[1])  # no search run reaches it
+        self.assertEqual(set(out["candidate"]), {"metrics", "fills", "years", "depth", "returns"})
+        self.assertEqual(out["candidate"]["returns"].index[0] >= self.win.holdout_start, True)
+        self.runner.run(self.job("setA", marker))  # the guard allows the same set (hpo itself refuses a second look)
+        from backtest import api
+        with self.assertRaises(api.HoldoutRead):
+            self.runner.run(self.job("setB", marker))
+
+    def test_a_replay_returns_the_twr_index_from_the_start_date(self):
+        out = self.runner.run({"replay": True, "values": self.runner.space.defaults, "start": self.days[400], "end": self.days[440]})
+        self.assertEqual(out["twr"].index[0], self.days[400])
+        self.assertGreater(len(out["twr"]), 20)
+
+
 if __name__ == "__main__":
     unittest.main()

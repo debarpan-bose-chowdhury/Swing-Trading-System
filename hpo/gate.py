@@ -169,9 +169,19 @@ def audit(ev: dict, cfg: dict) -> dict:
     return {"items": items, "flagged": flagged, "notAssessed": NOT_ASSESSED, "passed": not flagged}
 
 
-def save(folder: Path, ev: dict, verdict: dict, aud: dict) -> None:
-    """candidates/<id>/: evidence.json (no arrays), series.parquet (the curves), returns.parquet, gate.json."""
+def save(folder: Path, ev: dict, verdict: dict, aud: dict, cfg: dict | None = None) -> None:
+    """candidates/<id>/: evidence.json (no arrays), series.parquet (the curves), returns.parquet, gate.json, and (with cfg) criterion.json: the holdout pass
+    criterion, registered now, before anyone has looked at the holdout (its hash goes into gate.json). Evidence is frozen once the holdout is scored."""
+    if (folder / "holdout.json").exists():
+        from hpo.errors import Refusal
+        raise Refusal("the holdout was already scored for this candidate: its evidence is frozen and cannot be regenerated")
     folder.mkdir(parents=True, exist_ok=True)
+    sha = None
+    if cfg is not None:
+        from hpo import holdout
+        crit = holdout.criterion(ev, cfg)
+        write_json(folder / holdout.CRITERION_FILE, crit)
+        sha = holdout.sha_of(crit)
     series = {}
     for who in ("candidate", "default"):
         d = ev["_series"][who]
@@ -182,4 +192,4 @@ def save(folder: Path, ev: dict, verdict: dict, aud: dict) -> None:
     pd.DataFrame(series).rename_axis("date").reset_index().to_parquet(folder / "series.parquet", index=False)
     pd.DataFrame(ev["_returns"]).rename_axis("date").reset_index().to_parquet(folder / "returns.parquet", index=False)
     write_json(folder / "evidence.json", clean({k: v for k, v in ev.items() if not k.startswith("_")}))
-    write_json(folder / "gate.json", clean({**verdict, "audit": aud}))
+    write_json(folder / "gate.json", clean({**verdict, "audit": aud, "criterionSha": sha}))
