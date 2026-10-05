@@ -34,7 +34,7 @@ from hpo.progress import Progress
 from hpo.status import RunLock, read_json, write_json
 
 IDENTITY_KEYS = ("dataHash", "codeSha", "baseConfig", "span", "folds", "writeOff", "schemaVersion")
-RAW_KEYS = {"name", "stage", "sampler", "active", "exclude", "allow_unfreeze", "trials", "seed", "enqueueDefault", "variants"}
+RAW_KEYS = {"name", "stage", "sampler", "active", "exclude", "allow_unfreeze", "trials", "seed", "enqueueDefault", "variants", "fixed", "from"}
 
 
 def resolve_spec(raw: dict, space, settings: dict) -> dict:
@@ -45,13 +45,17 @@ def resolve_spec(raw: dict, space, settings: dict) -> dict:
     names = space.select(raw["active"], raw.get("exclude", []), raw.get("allow_unfreeze", []))
     if not names:
         raise Failed("study file: no active parameter is left after freezing (frozen classes need allow_unfreeze)")
-    return {"name": str(raw["name"]), "stage": str(raw.get("stage", "?")), "sampler": raw.get("sampler", "sobol"), "trials": int(raw.get("trials", 64)),
+    fixed = dict(raw.get("fixed") or {})
+    bad = [n for n in fixed if n not in space.dims or n in names]
+    if bad:
+        raise Failed(f"study file: fixed names must be dimensions that are not active: {bad}")
+    return {"name": str(raw["name"]), "fixed": fixed, "from": raw.get("from"), "stage": str(raw.get("stage", "?")), "sampler": raw.get("sampler", "sobol"), "trials": int(raw.get("trials", 64)),
             "seed": int(raw.get("seed", settings["compute"]["seed"])), "enqueueDefault": bool(raw.get("enqueueDefault", True)),
             "variants": int(raw.get("variants", settings["space"]["variants"])), "active": names, "unfrozen": space.unfrozen(names), "file": raw}
 
 
 def spec_hash(spec: dict) -> str:
-    keep = {k: spec[k] for k in ("name", "sampler", "seed", "enqueueDefault", "variants", "active")}
+    keep = {k: spec.get(k) for k in ("name", "sampler", "seed", "enqueueDefault", "variants", "active", "fixed")}
     return hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -230,7 +234,7 @@ class Study:
 
     # --- one trial ------------------------------------------------------------------------------------------------------------------
     def _values(self, params: dict) -> dict:
-        return self.space.complete({n: (bool(v) if self.space.dims[n].kind == "bool" else v) for n, v in params.items()})
+        return self.space.complete({**self.spec.get("fixed", {}), **{n: (bool(v) if self.space.dims[n].kind == "bool" else v) for n, v in params.items()}})
 
     def _dispatch(self, trial, params: dict):
         """Run the point: a rejected point and a cache hit finish at once (no simulation); anything else goes to the pool."""

@@ -24,9 +24,9 @@ Full setup: `doc/LOCAL_SETUP.md`.
 - Public API for an optimiser: `backtest/api.py` (only import from `backtest/` in `hpo/`). Every number is classified in `doc/parameter_register.csv` (`uv run --project backtest python -m backtest.register --write`; `test_register.py` fails on a new hardcoded number in the return-affecting modules: make it a config key with the old value as default). Default-parity fingerprint: `backtest.golden`.
 - Reads `app/` and `app/data/` only; never writes them. Not copied into any Docker image.
 
-## HPO (sibling `hpo/`, personal use, phases 1-2 built)
+## HPO (sibling `hpo/`, personal use, phases 1-3 built)
 - Design: `doc/HPO_TDD.md`; notes and deviations: `doc/HPO_Implementation_Notes.md`. Check: `uv run --project hpo python -m hpo.cli --check`. Tests: `uv run --project hpo pytest -c hpo/pyproject.toml`.
-- Commands: `hpo.cli space build|check|show`, `study new --config hpo/config/studies/s0.yaml` / `study run --name s0 [--workers 8]` / `study resume` / `study status`, `sensitivity --name`, `report --name`, `live --name`, `ledger show`. Writes only under `hpo/data/` (git-ignored); imports `app` and `backtest.api` only; not in any image.
+- Commands: `hpo.cli space build|check|show`, `study new --config hpo/config/studies/s0.yaml` / `study run --name s0 [--workers 8]` / `study resume` / `study status`, `sensitivity --name`, `front --name [--select calmar|knee]`, `stages plan|advise --name`, `report --name`, `live --name`, `ledger show`; samplers sobol/tpe/gp (`gp` needs `--extra gp`). Writes only under `hpo/data/` (git-ignored); imports `app` and `backtest.api` only; not in any image.
 
 ## Exit codes
 0 ok, 1 failed, 2 busy (run lock), 3 gate not met (run the upstream stage first).

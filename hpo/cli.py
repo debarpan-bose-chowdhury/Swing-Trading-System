@@ -6,7 +6,9 @@
   sensitivity --name N            importance and the freeze list (writes sensitivity.json and proposed_active.yaml in the study folder)
   report --name N [--open]        HTML study report;  live --name N  auto-refreshing dashboard while a study runs
   ledger show
-  front, robust, gate, holdout, promote: later phases (they exit 1 with a message until built)
+  front --name N [--select calmar|knee]   the feasible front and one pick
+  stages plan|advise --name N     B-block study files from a screen; the B-to-C switch advice (GP refinement file)
+  robust, gate, holdout, promote: later phases (they exit 1 with a message until built)
 """
 
 import argparse
@@ -20,11 +22,11 @@ from pathlib import Path
 import yaml
 
 from hpo import ledger as ledger_mod
-from hpo import objective, sensitivity, settings, space as space_mod, study as study_mod
+from hpo import objective, pareto, sensitivity, settings, stages, space as space_mod, study as study_mod
 from hpo.errors import Busy, Failed, Refusal
 from hpo.status import read_json, write_json
 
-LATER = {"front": 3, "robust": 4, "gate": 4, "holdout": 5, "promote": 5}
+LATER = {"robust": 4, "gate": 4, "holdout": 5, "promote": 5}
 
 
 def _space(cfg: dict):
@@ -67,6 +69,10 @@ def cmd_study(a, cfg) -> int:
     bt, sp = _space(cfg)
     if a.action == "new":
         raw = study_mod.load_spec_file(a.config)
+        raw.pop("note", None)
+        if raw.get("from") and not raw.get("fixed"):
+            prev = study_mod.Study.open(cfg, sp, raw["from"])
+            raw["fixed"] = stages.chain_fixed(prev.spec, study_mod.read_records(prev.trials_path), raw.pop("from_rule", "calmar"))
         st = study_mod.Study.create(cfg, sp, raw)
         print(f"created study {st.spec['name']}: {len(st.spec['active'])} active parameters, {st.spec['trials']} trials, sampler {st.spec['sampler']}, folder {st.dir}")
         for n in st.spec["unfrozen"]:
@@ -95,6 +101,48 @@ def cmd_sensitivity(a, cfg) -> int:
     print(_table([{**r, "name": r["name"][-48:]} for r in res["dims"]], ["name", "importanceF1", "importanceF2", "importanceFeasibility", "spearmanF1", "decision"]))
     print(f"\nkeep {len(res['keep'])}, freeze {len(res['freeze'])} ({len(res['collapsedOffsets'])} per-bucket offsets collapse to the shared value); "
           f"proposed next study: {st.dir / 'proposed_active.yaml'}")
+    return 0
+
+
+def cmd_front(a, cfg) -> int:
+    _, sp = _space(cfg)
+    st = study_mod.Study.open(cfg, sp, a.name)
+    rows = stages.front_rows(study_mod.read_records(st.trials_path))
+    if not rows:
+        print("no feasible trial yet")
+        return 1
+    pick = pareto.select(rows, a.select)
+    show = [{"trial": r["trial"], "cagr%": round(100 * r["f1"], 2), "maxDD%": round(-100 * r["f2"], 2), "calmar": r["calmar"] if r["calmar"] is not None else float("nan"), "fills": r["fills"],
+             "picked": "<-- " + a.select if r["trial"] == pick["trial"] else ""} for r in sorted(rows, key=lambda r: r["f2"])]
+    print(_table(show, ["trial", "cagr%", "maxDD%", "calmar", "fills", "picked"]))
+    write_json(st.dir / "front.json", {"select": a.select, "picked": pick["trial"], "front": rows})
+    return 0
+
+
+def cmd_stages(a, cfg) -> int:
+    _, sp = _space(cfg)
+    st = study_mod.Study.open(cfg, sp, a.name)
+    recs = study_mod.read_records(st.trials_path)
+    sens = read_json(st.dir / "sensitivity.json")
+    plan = st.dir / "plan"
+    if a.action == "advise":
+        r = stages.recommend(recs, st.spec, sp, sens, cfg)
+        print(f"{r['action']}" + (f" (hypervolume gain {r['hvGain']:.1%} over the last {stages.HV_WINDOW} trials)" if r["hvGain"] is not None else ""))
+        for x in r["reasons"]:
+            print(f"  - {x}")
+        if r["action"] == "switch to gp":
+            plan.mkdir(exist_ok=True)
+            (plan / "C.yaml").write_text(yaml.safe_dump(stages.plan_refine(sp, sens, st.spec, cfg), sort_keys=False), encoding="utf-8")
+            print(f"  wrote {plan / 'C.yaml'}")
+        return 0
+    if sens is None:
+        print("run `sensitivity --name` first")
+        return 1
+    plan.mkdir(exist_ok=True)
+    for blk in stages.plan_blocks(sp, sens, st.spec):
+        (plan / f"{blk['stage']}.yaml").write_text(yaml.safe_dump(blk, sort_keys=False), encoding="utf-8")
+        print(f"  {blk['name']}: {len(blk['active'])} parameters ({blk['note']})")
+    print(f"files in {plan}; run them in order with `study new --config` (each fixes the earlier blocks at their selected trial)")
     return 0
 
 
@@ -155,6 +203,12 @@ def parser() -> argparse.ArgumentParser:
     ssub.add_parser("resume").add_argument("--name", required=True)
     ssub.add_parser("status").add_argument("--name", required=True)
     sub.add_parser("sensitivity").add_argument("--name", required=True)
+    fr = sub.add_parser("front")
+    fr.add_argument("--name", required=True)
+    fr.add_argument("--select", choices=["calmar", "knee"], default="calmar")
+    sg = sub.add_parser("stages")
+    sg.add_argument("action", choices=["plan", "advise"])
+    sg.add_argument("--name", required=True)
     rep = sub.add_parser("report")
     rep.add_argument("--name")
     rep.add_argument("--candidate")
@@ -188,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.cmd in LATER:
             print(f"`{a.cmd}` arrives in phase {LATER[a.cmd]} of doc/HPO_TDD.md")
             return 1
-        handler = {"space": cmd_space, "study": cmd_study, "sensitivity": cmd_sensitivity, "report": cmd_report, "live": cmd_live, "ledger": cmd_ledger}.get(a.cmd)
+        handler = {"space": cmd_space, "study": cmd_study, "sensitivity": cmd_sensitivity, "front": cmd_front, "stages": cmd_stages, "report": cmd_report, "live": cmd_live, "ledger": cmd_ledger}.get(a.cmd)
         if handler is None:
             parser().print_help()
             return 1

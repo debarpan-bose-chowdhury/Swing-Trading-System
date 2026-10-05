@@ -34,7 +34,12 @@ def make_sampler(kind: str, seed: int):
         return optuna.samplers.QMCSampler(qmc_type="sobol", scramble=True, seed=seed, warn_independent_sampling=False, warn_asynchronous_seeding=False)
     if kind == "tpe":
         return optuna.samplers.TPESampler(multivariate=True, group=True, constant_liar=True, seed=seed, n_startup_trials=20)
-    raise ValueError(f"unknown sampler {kind!r} (sobol and tpe exist in this phase; gp arrives with the refinement stage)")
+    if kind == "gp":
+        try:
+            return optuna.samplers.GPSampler(seed=seed, n_startup_trials=20, deterministic_objective=True)
+        except ModuleNotFoundError as e:  # Optuna's GP sampler needs PyTorch, which is an optional extra here
+            raise ValueError("the gp sampler needs PyTorch: install with `uv sync --project hpo --extra gp` (CPU build: see doc/HPO_Implementation_Notes.md)") from e
+    raise ValueError(f"unknown sampler {kind!r}: sobol, tpe or gp")
 
 
 def storage(journal: Path):
