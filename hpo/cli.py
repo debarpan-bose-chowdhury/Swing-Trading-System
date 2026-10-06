@@ -141,7 +141,30 @@ def probe_lines(out: dict, cfg: dict, changed: dict) -> list[str]:
              "folds (CAGR, max drawdown, fills per year):"]
     lines += [f"  fold {i + 1}: {a:>8.2%} {b:>8.2%} {n:>6.1f}" for i, (a, b, n) in enumerate(fold)]
     lines.append("regime shares: " + ", ".join(f"{r} {v:.0%}" for r, v in out.get("regimeShare", {}).items()))
+    lines += _detail_lines(out.get("detail"))
     return lines
+
+
+def _detail_lines(d: dict | None) -> list[str]:
+    """Where a run's drawdown and cost came from: the deepest drawdown by date, the named stress windows, regimes, ladder rungs, and each year's activity."""
+    if not d:
+        return []
+    nav = d["nav"]
+    out = ["", "where it came from:"]
+    dd = nav / nav.cummax() - 1.0
+    trough = dd.idxmin()
+    peak = nav.loc[:trough].idxmax()
+    out.append(f"  deepest drawdown {-dd.min():.1%}: peak {peak} -> trough {trough}")
+    out.append("  stress windows (return, max drawdown):")
+    out += [f"    {n:<32} {w['return']:>8.1%} {w['maxDrawdown']:>8.1%}" for n, w in d["stressWindows"].items()] or ["    (none overlap the run)"]
+    out.append("  regimes (share of days, annualised return, max drawdown):")
+    out += [f"    {r:<8} {v['share']:>5.0%} {v['cagr'] if v['cagr'] is not None else float('nan'):>8.1%} {v['maxDrawdown'] if v['maxDrawdown'] is not None else float('nan'):>8.1%}" for r, v in d["regimes"].items()]
+    rung = d["rung"].round().astype(int).value_counts(normalize=True).sort_index()
+    out.append("  days on each ladder rung (0 = fully allowed, higher = cut back): " + ", ".join(f"{int(k)}: {v:.0%}" for k, v in rung.items()))
+    pr, expo = d["profile"], d["exposure"].groupby(d["exposure"].index.str[:4]).mean()
+    out.append("  by year: fills, turnover (x NAV), charges (% NAV), average exposure")
+    out += [f"    {y}  {pr['fillsPerYear'].get(y, 0):>5}  {pr['turnover'].get(y, 0):>6.1f}  {100 * pr['costDrag'].get(y, 0):>6.2f}%  {expo.get(y, 0):>6.1%}" for y in sorted(set(pr["fillsPerYear"]) | set(expo.index))]
+    return out
 
 
 def cmd_probe(a, cfg) -> int:
@@ -155,7 +178,7 @@ def cmd_probe(a, cfg) -> int:
     pool = _pool(cfg, 1)
     try:
         t0 = time.time()
-        out = pool.submit({"values": values, "noAbort": True}).result()
+        out = pool.submit({"values": values, "noAbort": True, "detail": True}).result()
     finally:
         pool.close()
     print("\n".join(probe_lines(out, cfg, changed)))

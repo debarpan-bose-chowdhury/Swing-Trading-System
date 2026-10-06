@@ -7,6 +7,9 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
+import pandas as pd
+
 from hpo import cli
 from hpo.errors import Busy, Failed, Refusal
 from tests.hpo.fakes import REPO
@@ -59,6 +62,17 @@ class ProbeTests(unittest.TestCase):
         self.assertIn("ok     max drawdown depth", text)
         self.assertIn("fold 2:", text)
         self.assertIn("risk.sizing.minNewOrderInr", text)
+        days = [d.strftime("%Y-%m-%d") for d in pd.bdate_range("2012-01-02", periods=600)]
+        nav = pd.Series(np.r_[np.linspace(100, 150, 200), np.linspace(150, 80, 200), np.linspace(80, 120, 200)], index=days)
+        out["detail"] = {"nav": nav, "exposure": pd.Series(0.3, index=days), "rung": pd.Series(np.r_[np.zeros(300), np.full(300, 2.0)], index=days),
+                         "regimes": {"BULL": {"share": 0.6, "cagr": 0.1, "maxDrawdown": -0.2}, "BEAR": {"share": 0.4, "cagr": None, "maxDrawdown": None}},
+                         "stressWindows": {"2008 crisis": {"return": -0.4, "maxDrawdown": -0.46}},
+                         "profile": {"fillsPerYear": {"2012": 100, "2013": 80}, "turnover": {"2012": 6.0, "2013": 5.0}, "costDrag": {"2012": 0.03, "2013": 0.025}}}
+        full = "\n".join(cli.probe_lines(out, cfg, {}))
+        self.assertIn("deepest drawdown 46.7%", full)
+        self.assertIn("2008 crisis", full)
+        self.assertIn("0: 50%, 2: 50%", full)
+        self.assertIn("2012    100", full)
         self.assertIn("status aborted", "\n".join(cli.probe_lines({"status": "aborted", "error": None, "attrs": {"abortReason": "x"}}, cfg, {})))
 
     def test_probe_rejects_an_unknown_parameter(self):
