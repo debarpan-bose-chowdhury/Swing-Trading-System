@@ -173,11 +173,18 @@ class SingleRun(World):
         for k in ("objectives", "preTax", "postTax", "trades", "tax"):
             self.assertEqual(rep[k], again[k])  # deterministic
 
-    def test_default_start_is_the_first_known_regime_and_one_lakh_does_not_trade_without_overrides(self):
+    def test_default_start_is_the_first_known_regime_and_a_small_account_does_not_trade_without_overrides(self):
         self.bt["overrides"]["risk"] = {}
+        self.bt["capital"]["inr"] = 100000  # the premise of this test is a small account: pinned, so it does not move with the shipped capital
         rep = json.loads(run.single(self.bt, None, self.days[300]).read_text())
         self.assertEqual(rep["trades"]["fills"], 0)  # minNewOrderInr 25000 is above every position a Rs 1 lakh account sizes
         self.assertGreaterEqual(rep["window"]["start"], self.days[200])
+
+    def test_the_shipped_capital_clears_the_live_sizing_gate(self):
+        """The shipped capital (backtest.json) must be large enough for the live risk.json minimum order: `hpo.cli capital` computes the bound."""
+        self.bt["overrides"]["risk"] = {}
+        rep = json.loads(run.single(self.bt, None, self.days[560]).read_text())
+        self.assertGreater(rep["trades"]["fills"], 0, "the shipped capital is too small for the live minNewOrderInr: raise backtest.json capital.inr (see `hpo.cli capital`)")
 
     def test_compare_is_refused_until_the_adjustment_is_validated(self):
         self.bt["universe"]["adjustValidated"] = False

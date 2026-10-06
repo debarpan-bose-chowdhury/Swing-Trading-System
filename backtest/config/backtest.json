@@ -1,7 +1,7 @@
 {
   "window": { "start": null, "end": null, "holdoutYears": 2 },
   "broker": { "profile": "angelone", "chargesFrom": "app/config/analyst.json" },
-  "capital": { "inr": 200000, "composition": { "LargeCap": 0.5, "MidCap": 0.3, "SmallCap": 0.2 } },
+  "capital": { "inr": 450000, "composition": { "LargeCap": 0.5, "MidCap": 0.3, "SmallCap": 0.2 } },
   "fill": {
     "mode": "open",
     "realism": { "bands": false, "volumeCap": false, "circuitLocks": false, "settlementLag": false },

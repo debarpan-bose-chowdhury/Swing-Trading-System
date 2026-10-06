@@ -6,6 +6,7 @@
   sensitivity --name N            importance and the freeze list (writes sensitivity.json and proposed_active.yaml in the study folder)
   report --name N | --candidate ID [--open]   HTML study report or candidate report;  live --name N  auto-refreshing dashboard while a study runs
   ledger show
+  capital [--price P]             the smallest account at which the live sizing minimums can place an order, per bucket and regime
   probe [--set NAME=VALUE ...]    run ONE configuration (live default plus the --set values) with no abort rules and show it against every constraint limit
   front --name N [--select calmar|knee]   the feasible front and one pick
   stages plan|advise --name N     B-block study files from a screen; the B-to-C switch advice (GP refinement file)
@@ -183,6 +184,20 @@ def cmd_probe(a, cfg) -> int:
         pool.close()
     print("\n".join(probe_lines(out, cfg, changed)))
     print(f"({time.time() - t0:.0f} s; no abort rules, nothing is recorded in any study)")
+    return 0
+
+
+def cmd_capital(a, cfg) -> int:
+    from hpo import capital
+    from backtest import api
+    bt, risk, analyst = api.base_configs()
+    r = capital.required(risk, analyst, a.price)
+    print(f"live sizing: minimum new order Rs {r['minimumOrder']:,}; share price slack Rs {a.price:,.0f}; capital now: analyst Rs {analyst['capital']['floatingCapitalInr']:,}, backtest Rs {bt['capital']['inr']:,.0f}")
+    print(_table([{"regime": x["regime"], "bucket": x["bucket"], "top_n": x["names"], "entry as % of NAV": round(100 * x["fraction"], 2), "limited by": x["limitedBy"], "capital needed": f"{x['needed']:,.0f}"} for x in r["rows"]],
+                 ["regime", "bucket", "top_n", "entry as % of NAV", "limited by", "capital needed"]))
+    print(f"\nbest bucket per regime: " + ", ".join(f"{g} Rs {b['needed']:,.0f} ({b['bucket']})" for g, b in r["bestPerRegime"].items() if b))
+    print(f"simple name-cap check only (minimum order / largest name cap): Rs {r['namecapOnly']:,.0f} (too low: whole shares and bucket budgets are ignored)")
+    print(f"an entry in at least one regime: Rs {r['anyRegime']:,.0f};  in EVERY regime: Rs {r['everyRegime']:,.0f}  (rounded up to Rs {capital.round_up(r['everyRegime']):,})")
     return 0
 
 
@@ -397,6 +412,8 @@ def parser() -> argparse.ArgumentParser:
     ssub.add_parser("status").add_argument("--name", required=True)
     ssub.add_parser("diagnose").add_argument("--name", required=True)
     sub.add_parser("sensitivity").add_argument("--name", required=True)
+    cp = sub.add_parser("capital")
+    cp.add_argument("--price", type=float, default=2000.0, help="a typical share price, the rounding slack of whole shares (default 2000)")
     pr = sub.add_parser("probe")
     pr.add_argument("--set", action="append", metavar="NAME=VALUE")
     fr = sub.add_parser("front")
@@ -452,7 +469,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.cmd in LATER:
             print(f"`{a.cmd}` arrives in phase {LATER[a.cmd]} of doc/HPO_TDD.md")
             return 1
-        handler = {"space": cmd_space, "study": cmd_study, "sensitivity": cmd_sensitivity, "front": cmd_front, "probe": cmd_probe, "stages": cmd_stages, "robust": cmd_robust, "gate": cmd_gate, "holdout": cmd_holdout, "promote": cmd_promote, "shadow": cmd_shadow, "report": cmd_report, "live": cmd_live, "ledger": cmd_ledger}.get(a.cmd)
+        handler = {"space": cmd_space, "study": cmd_study, "sensitivity": cmd_sensitivity, "front": cmd_front, "capital": cmd_capital, "probe": cmd_probe, "stages": cmd_stages, "robust": cmd_robust, "gate": cmd_gate, "holdout": cmd_holdout, "promote": cmd_promote, "shadow": cmd_shadow, "report": cmd_report, "live": cmd_live, "ledger": cmd_ledger}.get(a.cmd)
         if handler is None:
             parser().print_help()
             return 1
