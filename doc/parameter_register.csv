@@ -120,7 +120,7 @@ analyst:broker.loginRetryGapSeconds,app/config/analyst.json,60,int,,,operational
 analyst:broker.clientLocalIp,app/config/analyst.json,"""127.0.0.1""",str,,,operational,broker,live,,
 analyst:broker.clientPublicIp,app/config/analyst.json,"""127.0.0.1""",str,,,operational,broker,live,,
 analyst:broker.clientMacAddress,app/config/analyst.json,"""00:00:00:00:00:00""",str,,,operational,broker,live,,
-analyst:capital.floatingCapitalInr,app/config/analyst.json,100000,int,,,design,capital,both,,
+analyst:capital.floatingCapitalInr,app/config/analyst.json,200000,int,,,design,capital,both,,
 analyst:capital.ignoreSymbols,app/config/analyst.json,[],list,,,operational,capital,live,,
 analyst:limits.maxPositionDrawdownPct,app/config/analyst.json,0.17,float,,,risk-limit,limits,live,,live-monitoring limits
 analyst:limits.maxPortfolioDrawdownPct,app/config/analyst.json,0.5,float,,,risk-limit,limits,live,,live-monitoring limits
@@ -238,7 +238,7 @@ backtest:window.end,backtest/config/backtest.json,null,null,,,design,window,back
 backtest:window.holdoutYears,backtest/config/backtest.json,2,int,,,design,window,backtest,,
 backtest:broker.profile,backtest/config/backtest.json,"""angelone""",str,,,design,broker,backtest,,
 backtest:broker.chargesFrom,backtest/config/backtest.json,"""app/config/analyst.json""",str,,,design,broker,backtest,,
-backtest:capital.inr,backtest/config/backtest.json,100000,int,,,design,capital,backtest,,
+backtest:capital.inr,backtest/config/backtest.json,200000,int,,,design,capital,backtest,,
 backtest:capital.composition.LargeCap,backtest/config/backtest.json,0.5,float,,,design,capital,backtest,,
 backtest:capital.composition.MidCap,backtest/config/backtest.json,0.3,float,,,design,capital,backtest,,
 backtest:capital.composition.SmallCap,backtest/config/backtest.json,0.2,float,,,design,capital,backtest,,

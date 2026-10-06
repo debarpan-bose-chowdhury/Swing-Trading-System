@@ -96,6 +96,7 @@ class EngineCase(World):
         self.bt = repo_config()
         self.bt["overrides"]["risk"] = {"sizing": {"minNewOrderInr": 3000, "minAdjustmentInr": 1500}}
         self.bt["tax"]["confirmed"] = True
+        self.bt["capital"]["inr"] = 100000  # the abort tests need an account too small to trade at a 10,000 minimum order: pinned here so they do not move with the shipped capital
         self.w = world.World.build(self.bt)
         wf = dict(self.bt["walkforward"], trainYears=1, testYears=1, purgeDays=10)
         self.win = walkforward.Windows(list(self.w.data.index.Date), self.days[300], wf, 1, 0)
