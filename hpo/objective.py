@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 from backtest import api
-from hpo import space as space_mod
+from hpo import settings as settings_mod, space as space_mod
 
 WORST = (-1.0, 1.0)  # placeholder objectives of a trial that has none (post-tax CAGR -100%, drawdown depth 100%)
 CONSTRAINT_KEYS = ("valid", "aborted", "dd_cap", "min_fills", "fills_per_fold_year", "min_exposure")
@@ -172,7 +172,7 @@ class BacktestRunner:
     def __init__(self, settings: dict, world=None, windows=None, folds: list[tuple[str, str]] | None = None, schema_path: str | None = None):
         """world, windows, folds and schema_path are for tests and replays; a study builds everything from the settings and the stored data."""
         self.cfg = settings
-        self.w = world or api.build_world({"universe": {"mode": settings["universe"]["selection"]}}, targets_cache_size=settings["compute"]["targetsCache"])
+        self.w = world or api.build_world(settings_mod.bt_overrides(settings), targets_cache_size=settings["compute"]["targetsCache"])
         self.space = space_mod.load(settings, self.w.risk, self.w.analyst, schema_path)
         dates = list(self.w.data.index.Date)
         self.windows = windows or api.windows(self.w, start=dates[self.space.warmup_rows()], required_purge=self.space.longest_lookback())
@@ -197,7 +197,7 @@ class BacktestRunner:
         mode = stress.get("universe")
         if mode and mode != self.cfg["universe"]["selection"]:
             if mode not in self._alt:
-                self._alt[mode] = api.build_world({"universe": {"mode": mode}}, targets_cache_size=self.cfg["compute"]["targetsCache"])
+                self._alt[mode] = api.build_world(settings_mod.bt_overrides(self.cfg, mode), targets_cache_size=self.cfg["compute"]["targetsCache"])
             w = self._alt[mode]
         if stress.get("dropNames"):
             key = (mode, stress["dropNames"], stress.get("seed", 1))

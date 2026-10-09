@@ -8,12 +8,14 @@ from unittest.mock import patch
 from backtest import api
 from hpo import settings as hpo_settings
 from hpo import space
+from tests import fixtures
 from tests.hpo.fakes import REPO
 
 
 def load_space():
     cfg = hpo_settings.load("hpo/config/hpo.json")
-    _, risk, analyst = api.base_configs()
+    with fixtures.pinned():
+        _, risk, analyst = api.base_configs()
     return cfg, risk, analyst, space.load(cfg, risk, analyst)
 
 

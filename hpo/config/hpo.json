@@ -1,9 +1,10 @@
 {
   "paths": {"data": "hpo/data", "register": "doc/parameter_register.csv", "schema": "hpo/schema/parameters.schema.json",
             "extraBounds": "hpo/config/space_extra.json", "studies": "hpo/config/studies"},
+  "capital": {"inr": null},
   "universe": {"selection": "pit", "writeOff": 0.5, "stressWriteOffs": [0.0, 1.0], "finalCheck": "today"},
-  "objectives": {"cagr": {"fold": "cvar", "worstShare": 0.30}, "drawdown": "span", "hvReference": [-0.10, 0.35]},
-  "constraints": {"maxDrawdown": -0.30, "minFills": 300, "minFillsPerFoldYear": 15, "minAvgExposure": 0.40, "abortDrawdown": -0.35, "abortNoFillYears": 3},
+  "objectives": {"cagr": {"fold": "cvar", "worstShare": 0.30}, "drawdown": "span", "hvReference": [-0.10, 0.45]},
+  "constraints": {"maxDrawdown": -0.40, "minFills": 300, "minFillsPerFoldYear": 15, "minAvgExposure": 0.25, "abortDrawdown": -0.45, "abortNoFillYears": 3},
   "space": {"compositionFloor": 0.1, "offsetShare": 0.25, "variants": 3},
   "ledger": {"effectiveNCap": 200, "clusterRhoMax": 0.5, "defaultEffectiveRatio": 0.3},
   "robust": {"top": 30, "neighbours": 16, "quantile": 0.25, "intStep": 1, "floatRel": 0.10, "cliffPp": 0.03,

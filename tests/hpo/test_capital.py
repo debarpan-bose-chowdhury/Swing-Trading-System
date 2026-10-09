@@ -42,6 +42,16 @@ class FormulaTests(unittest.TestCase):
         self.assertGreater(self.rows(price=8000.0)["everyRegime"], self.rows()["everyRegime"])
 
 
+class ShippedCapitalTests(unittest.TestCase):
+    def test_the_shipped_capital_clears_the_shipped_sizing_in_every_regime(self):
+        """Reads app/config and backtest.json as shipped (not the pinned test copies): retuning the sizing must not leave the capital too small to trade."""
+        bt, risk, analyst = api.base_configs()
+        need = capital.required(risk, analyst, 2000.0)["everyRegime"]
+        self.assertGreaterEqual(bt["capital"]["inr"], need, f"raise backtest.json capital.inr to at least Rs {capital.round_up(need):,} (hpo.cli capital)")
+        self.assertGreaterEqual(analyst["capital"]["floatingCapitalInr"], need)
+        self.assertGreaterEqual(bt["capital"]["inr"], 100000)
+
+
 class EngineGateTests(EngineCase):
     """The live sizing minimum (25,000), not the test's 3,000: entries appear only once the account clears the arithmetic."""
 

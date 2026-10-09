@@ -12,8 +12,10 @@ import requests
 
 from app.analyst import broker, common, probe
 from app.analyst.broker import Broker, BrokerError, LoginFailed
+from tests import fixtures
 
-CFG = common.load_config()
+with fixtures.pinned():
+    CFG = common.load_config()
 SECRETS = {"ANGEL_API_KEY": "KEY-SECRET", "ANGEL_CLIENT_CODE": "C123", "ANGEL_MPIN": "9876", "ANGEL_TOTP_SECRET": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"}
 
 

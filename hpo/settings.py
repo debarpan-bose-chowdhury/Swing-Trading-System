@@ -4,9 +4,11 @@ import json
 from pathlib import Path
 
 CONFIG_PATH = "hpo/config/hpo.json"
+MIN_CAPITAL_INR = 100000  # same floor as backtest/config.py
 
 SECTIONS = {
     "paths": {"data", "register", "schema", "extraBounds", "studies"},
+    "capital": {"inr"},
     "universe": {"selection", "writeOff", "stressWriteOffs", "finalCheck"},
     "objectives": {"cagr", "drawdown", "hvReference"},
     "constraints": {"maxDrawdown", "minFills", "minFillsPerFoldYear", "minAvgExposure", "abortDrawdown", "abortNoFillYears"},
@@ -36,6 +38,8 @@ def validate(cfg: dict) -> None:
     for name, keys in SECTIONS.items():
         if set(cfg[name]) != keys:
             raise ValueError(f"hpo.json: {name} must have exactly the keys {sorted(keys)}")
+    if not (cfg["capital"]["inr"] is None or _num(cfg["capital"]["inr"], MIN_CAPITAL_INR)):
+        raise ValueError(f"capital.inr: null (use backtest.json) or Rs {MIN_CAPITAL_INR:,} (1 lakh) or more")
     u = cfg["universe"]
     if not (u["selection"] in ("today", "pit") and u["finalCheck"] in ("today", "pit") and _num(u["writeOff"], 0, 1) and all(_num(x, 0, 1) for x in u["stressWriteOffs"])):
         raise ValueError("universe: selection and finalCheck today or pit, writeOff and stressWriteOffs in [0, 1]")
@@ -84,3 +88,11 @@ def load(path: str = CONFIG_PATH) -> dict:
 
 def data_dir(cfg: dict) -> Path:
     return Path(cfg["paths"]["data"])
+
+
+def bt_overrides(cfg: dict, mode: str | None = None) -> dict:
+    """backtest.json overrides every hpo world is built with: the universe mode and, when hpo.json capital.inr is set, the starting capital."""
+    out = {"universe": {"mode": mode or cfg["universe"]["selection"]}}
+    if cfg["capital"]["inr"] is not None:
+        out["capital"] = {"inr": cfg["capital"]["inr"]}
+    return out

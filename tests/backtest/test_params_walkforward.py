@@ -8,10 +8,12 @@ import pandas as pd
 from app.analyst import common as analyst_common
 from app.risk import common as risk_common
 from backtest import params, walkforward
+from tests import fixtures
 
 REPO = Path(__file__).resolve().parents[2]
-RISK, ANALYST = risk_common.load_config("run"), analyst_common.load_config()  # read before any test changes the working directory
-BT = json.loads((REPO / "backtest/config/backtest.json").read_text())
+with fixtures.pinned():
+    RISK, ANALYST = risk_common.load_config("run"), analyst_common.load_config()  # read before any test changes the working directory
+BT = fixtures.load("backtest.json")
 
 
 def schema(**edit) -> params.Schema:

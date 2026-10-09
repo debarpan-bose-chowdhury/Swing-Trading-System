@@ -5,10 +5,11 @@ import unittest
 from pathlib import Path
 
 from app.risk import ladder
+from tests import fixtures
 
 
 def cfg(restart=None):
-    c = json.loads(Path("app/config/risk.json").read_text())
+    c = fixtures.load("risk.json")
     c["ladder"]["restartFrom"] = restart
     return c
 

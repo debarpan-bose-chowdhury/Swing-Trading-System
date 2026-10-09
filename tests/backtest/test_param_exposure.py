@@ -14,8 +14,10 @@ from backtest.targets import Targets, TargetsCache
 from tests.backtest.helpers import repo_config
 from tests.backtest.test_params_walkforward import schema
 from tests.backtest.test_phase4 import SingleRun
+from tests import fixtures
 
-RISK = risk_common.load_config("run")
+with fixtures.pinned():
+    RISK = risk_common.load_config("run")
 
 
 class CarryOver(unittest.TestCase):

@@ -20,6 +20,7 @@ import shutil
 import sys
 import time
 from concurrent.futures import FIRST_COMPLETED, wait
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
 import pandas as pd
@@ -148,7 +149,7 @@ class Study:
         started_n = sum(ft.state != samplers.WAITING for ft in study.get_trials(deepcopy=False))
         started, done0 = time.time(), len(self.records)
         self.eff = {"n": self.ledger.effective_total(), "at": len(self.records)}
-        prog, inflight = Progress(out), {}
+        prog, inflight, retried = Progress(out), {}, set()
         state = "finished"
         try:
             while True:
@@ -170,6 +171,14 @@ class Study:
                     trial, params = inflight.pop(fut)
                     try:
                         res = fut.result()
+                    except BrokenProcessPool as e:  # a worker died: every job in that pool fails with this; rebuild the pool and run each trial once more
+                        pool.restart(fut.pool)
+                        if trial.number in retried:
+                            res = {**objective.placeholder("fail"), "error": f"{type(e).__name__}: {e}", "seconds": 0.0}
+                        else:
+                            retried.add(trial.number)
+                            inflight[self._pool.submit({"values": self._values(params)})] = (trial, params)
+                            continue
                     except BaseException as e:  # noqa: BLE001  worker crash or pool failure: a FAIL trial, recorded
                         res = {**objective.placeholder("fail"), "error": f"{type(e).__name__}: {e}", "seconds": 0.0}
                     self._finish(study, trial, params, res)

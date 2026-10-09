@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -119,6 +120,20 @@ class SpikeRunner(FakeRunner):
 
 def make_runner() -> FakeRunner:
     return FakeRunner()
+
+
+class CrashOnceRunner(FakeRunner):
+    """The first simulation in the whole pool kills its worker process (an out-of-memory kill or a crash in native code); the marker file makes it happen once."""
+
+    def __init__(self, marker: str):
+        super().__init__()
+        self.marker = Path(marker)
+
+    def run(self, job: dict) -> dict:
+        if not job.get("values") is None and not self.marker.exists():
+            self.marker.write_text("x")
+            os._exit(1)
+        return super().run(job)
 
 
 def make_spike_runner() -> SpikeRunner:

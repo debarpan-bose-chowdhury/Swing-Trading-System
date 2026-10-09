@@ -14,43 +14,43 @@
   },
   "capital": { "floatingCapitalInr": 450000, "ignoreSymbols": [] },
   "limits": { "maxPositionDrawdownPct": 0.17, "maxPortfolioDrawdownPct": 0.5 },
-  "composition": { "LargeCap": 0.44, "MidCap": 0.32, "SmallCap": 0.24 },
+  "composition": { "LargeCap": 0.5, "MidCap": 0.3, "SmallCap": 0.2 },
   "rebalance": { "schedule": "weekly", "execution": "monday_open" },
-  "regime": { "index": "^NSEI", "persistenceWeeks": 4, "minRows": 210, "smaFast": 30, "smaSlow": 150, "momentumDays": 42, "momentumThreshold": -0.031651085, "unknownExtra": 16 },
+  "regime": { "index": "^NSEI", "persistenceWeeks": 4, "minRows": 210, "smaFast": 50, "smaSlow": 200, "momentumDays": 63, "momentumThreshold": 0.0, "unknownExtra": 9 },
   "strategies": {
     "BULL": {
-      "LargeCap": { "top_n": 2, "lookback": 189, "stock_trend_ma": 100 },
-      "MidCap": { "top_n": 3, "lookback": 168, "stock_trend_ma": 100 },
-      "SmallCap": { "top_n": 3, "lookback": 189, "stock_trend_ma": 100 }
+      "LargeCap": { "top_n": 2, "lookback": 126, "stock_trend_ma": 150 },
+      "MidCap": { "top_n": 2, "lookback": 126, "stock_trend_ma": 150 },
+      "SmallCap": { "top_n": 2, "lookback": 126, "stock_trend_ma": 150 }
     },
     "TREND": {
-      "LargeCap": { "top_n": 2, "lookback": 168, "stock_trend_ma": 175 },
-      "MidCap": { "top_n": 2, "lookback": 189, "stock_trend_ma": 175 },
-      "SmallCap": { "top_n": 3, "lookback": 189, "stock_trend_ma": 150 }
+      "LargeCap": { "top_n": 4, "lookback": 168, "stock_trend_ma": 150 },
+      "MidCap": { "top_n": 4, "lookback": 168, "stock_trend_ma": 150 },
+      "SmallCap": { "top_n": 4, "lookback": 168, "stock_trend_ma": 150 }
     },
     "WEAK": {
-      "LargeCap": { "top_n": 8, "lookback": 84, "stock_trend_ma": 175 },
-      "MidCap": { "top_n": 9, "lookback": 105, "stock_trend_ma": 200 },
-      "SmallCap": { "top_n": 7, "lookback": 105, "stock_trend_ma": 150 }
+      "LargeCap": { "top_n": 6, "lookback": 84, "stock_trend_ma": 150 },
+      "MidCap": { "top_n": 6, "lookback": 84, "stock_trend_ma": 150 },
+      "SmallCap": { "top_n": 6, "lookback": 84, "stock_trend_ma": 150 }
     },
     "BEAR": {
-      "LargeCap": { "top_n": 5, "lookback": 84, "stock_trend_ma": 150 },
-      "MidCap": { "top_n": 6, "lookback": 84, "stock_trend_ma": 150 },
-      "SmallCap": { "top_n": 6, "lookback": 84, "stock_trend_ma": 175 }
+      "LargeCap": { "top_n": 8, "lookback": 63, "stock_trend_ma": 150 },
+      "MidCap": { "top_n": 8, "lookback": 63, "stock_trend_ma": 150 },
+      "SmallCap": { "top_n": 8, "lookback": 63, "stock_trend_ma": 150 }
     }
   },
   "selector": {
     "maxStaleTradingDays": 0,
     "maxBucketFileAgeDays": 7,
     "maxMissingShare": 0.10,
-    "momentumSkipDays": 8,
-    "minMomentum": 0.0920172921,
-    "trendBuffer": 0.0344292143,
-    "liquidity": { "windowDays": 15, "minAdvCr": 15, "statistic": "median" },
+    "momentumSkipDays": 0,
+    "minMomentum": 0.0,
+    "trendBuffer": 0.0,
+    "liquidity": { "windowDays": 20, "minAdvCr": 10, "statistic": "median" },
     "bearScore": {
-      "mom20": 0.4702495703, "mom63": 0.6720478147, "hit20": 0.1091116956, "vol20": -0.1337631785, "dd63": 0.0148277409,
-      "windows": { "shortDays": 15, "longDays": 83, "hitDays": 29, "volDays": 17, "ddDays": 32 },
-      "confirmThreshold": 0.0392164252
+      "mom20": 0.40, "mom63": 0.35, "hit20": 0.20, "vol20": -0.35, "dd63": 0.10,
+      "windows": { "shortDays": 20, "longDays": 63, "hitDays": 20, "volDays": 20, "ddDays": 63 },
+      "confirmThreshold": 0.0
     }
   },
   "ledger": {

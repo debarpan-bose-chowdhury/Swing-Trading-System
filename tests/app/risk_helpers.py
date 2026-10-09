@@ -18,11 +18,13 @@ from app.market.store import Store
 from app.risk import run as risk_run
 from app.risk.common import Context, Portfolio, Report, load_config, read_json
 from app.market.tradingcal import Calendar
+from tests import fixtures
 
 LOG = logging.getLogger("test.risk")
-CFG = load_config("run")  # read before the tests change the working directory
+with fixtures.pinned():
+    CFG = load_config("run")  # the pinned risk.json, read before the tests change the working directory
 META = Path("app/config/config.json").read_text(encoding="utf-8")
-ANALYST = Path("app/config/analyst.json").read_text(encoding="utf-8")
+ANALYST = fixtures.text("analyst.json")
 FRIDAY, THURSDAY = "2026-09-25", "2026-09-24"
 NOW = datetime(2026, 9, 25, 21, 45, tzinfo=IST)
 BOOK_COLS = ["ticker", "qty", "avg_price", "entry_date", "entry_source", "last_reconciled"]

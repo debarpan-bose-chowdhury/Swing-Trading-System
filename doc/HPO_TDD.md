@@ -33,7 +33,7 @@ Oct 4, 2026 · @Deba · Status: draft for review · Depends on `Parameter_Exposu
 | D1 | Sequencing | Two specs: S1 exposure first, then this TDD |
 | D2 | Capital | Rs 1 lakh as today; sizing minimums, name caps and risk per position are searchable so the system trades |
 | D3 | Objectives | Pareto of fold-CVaR post-tax CAGR (max) and full-span post-tax max drawdown (min); ulcer index report-only |
-| D4 | Feasibility | Max drawdown ≥ -30%; fills ≥ 300 and ≥ 15 per fold-year; average gross exposure ≥ 40% (proposed defaults) |
+| D4 | Feasibility | Max drawdown ≥ -40%; fills ≥ 300 and ≥ 15 per fold-year; average gross exposure ≥ 25% (shipped values; the first proposal was -30% and 40%, and the live default at Rs 4.5 lakh does not meet either: see the Implementation Notes) |
 | D5 | Universe | Search on `pit` at 50% write-off; 0% and 100% as stress; re-check on `today` for the final bias estimate |
 | D6 | Scope | Everything configurable; risk-limit, model-input, regulatory, design and structural classes frozen by default |
 | D7 | Granularity | Strategy parameters searchable per bucket (not shared) |
@@ -126,13 +126,13 @@ Run from the repo root: `uv run --project hpo python -m hpo.cli ...`.
 - `f2` = full pre-holdout-span post-tax max drawdown (minimise).
 - Report-only: ulcer index, Calmar, Sortino, turnover, time under water, time in market, worst stress window.
 
-**Constraints** (reported through `trial.set_constraint`, value ≤ 0 is feasible): `dd_cap` (max drawdown ≥ -30%), `min_fills` (≥ 300), `fills_per_fold_year` (≥ 15), `min_exposure` (average gross exposure ≥ 40%, so "winning" by sitting in cash is infeasible), `aborted`.
+**Constraints** (reported through `trial.set_constraint`, value ≤ 0 is feasible): `dd_cap` (max drawdown ≥ -40%), `min_fills` (≥ 300), `fills_per_fold_year` (≥ 15), `min_exposure` (average gross exposure ≥ 40%, so "winning" by sitting in cash is infeasible), `aborted`.
 
-**Aborts.** Infeasibility only, never performance: abort a run when running drawdown is worse than -35%, or when there are no fills after 3 simulated years. The trial is recorded as infeasible, not as pruned. Performance-based pruning would favour configs that did well in the first years. If a screener fidelity is ever built, it prunes only across fidelities, after verifying rank agreement.
+**Aborts.** Infeasibility only, never performance: abort a run when running drawdown is worse than -45% (always at or below the drawdown cap), or when there are no fills after 3 simulated years. The trial is recorded as infeasible, not as pruned. Performance-based pruning would favour configs that did well in the first years. If a screener fidelity is ever built, it prunes only across fidelities, after verifying rank agreement.
 
 **Caching.** Results are keyed by `(config_hash, data_hash, code_sha, seed)`; the simulation is deterministic, so a hit is exact. `Targets` (regime history and weekly picks) is memoised by the hash of the regime, selector, strategy and universe parameters, with a configurable LRU size (default 4; each entry holds panels, so memory is about 350 MB per worker plus the cache). Stages that vary only stops and sizing reuse the same targets.
 
-**Failure mapping.** Exceptions and non-finite returns → trial `FAIL` (recorded, never retried silently). Zero fills, constraint violations, validator rejections → `COMPLETE` but infeasible. More than 5% `FAIL` in any 50-trial window aborts the study (exit 1).
+**Failure mapping.** Exceptions and non-finite returns → trial `FAIL` (recorded, never retried silently). The one exception is a dead worker process (`BrokenProcessPool`: killed, out of memory): the executor then fails every pending and later job, so `EvalPool` is rebuilt once and each affected trial is run once more; only a trial that breaks a fresh pool again is a `FAIL`. Zero fills, constraint violations, validator rejections → `COMPLETE` but infeasible. More than 5% `FAIL` in any 50-trial window aborts the study (exit 1).
 
 **Workers.** `evalpool.py` uses `backtest.workers` (`limit_threads()` in the parent, `init_worker()` in each worker): one native thread per worker, 8 workers by default (5.1× measured throughput). Workers are pure simulators: they receive a plain dict and return a result; only the parent touches Optuna and the files. Windows `spawn`: side-effect-free imports, a `__main__` guard, the world built once per worker in the initialiser.
 
@@ -212,9 +212,9 @@ Every sweep outcome has a chart. `hpo report` reads only the files under `hpo/da
 | # | Chart | What it answers |
 |---|---|---|
 | 1 | **Run summary tiles**: trials done, feasible share, FAIL count, hypervolume, best CAGR and drawdown, effective N vs the cap of 200, stage and sampler | Is the study healthy and how much budget is left |
-| 2 | **Pareto front scatter**: all feasible trials (CAGR on y, max drawdown on x), the front highlighted, the live default marked, the dd-cap line at -30%, colour by trial order | Where the trade-off lies and whether anything beats the default |
+| 2 | **Pareto front scatter**: all feasible trials (CAGR on y, max drawdown on x), the front highlighted, the live default marked, the dd-cap line at -40%, colour by trial order | Where the trade-off lies and whether anything beats the default |
 | 3 | **Hypervolume vs trials**, with stage boundaries and the "< 1% gain over 150 trials" stop rule marked | When to switch stage or stop |
-| 4 | **Feasibility funnel**: trials → valid → enough fills → exposure ≥ 40% → drawdown ≥ -30% | Which constraint is rejecting configs, and whether the space is mostly infeasible at Rs 1 lakh |
+| 4 | **Feasibility funnel**: trials → valid → enough fills → exposure ≥ 25% → drawdown ≥ -40% | Which constraint is rejecting configs, and whether the space is mostly infeasible at Rs 1 lakh |
 | 5 | **Parameter importance bars** (PED-ANOVA per objective; Morris or Sobol indices for Stage A) with the freeze/keep decision coloured | Which parameters matter, which to freeze |
 | 6 | **Slice plots** per top parameter (objective vs value, front trials highlighted) and **2-D contour or heatmap** for the top interacting pairs (for example top_n × lookback, ATR multiplier × clamp width) | Shape of the landscape: plateau, cliff or spike |
 | 7 | **Parallel-coordinates** plot of front trials over the top 12 parameters | What the good configs have in common |
@@ -264,7 +264,7 @@ You apply the overlay by hand and bump `config_version` in your changelog. The c
   "paths": {"data": "hpo/data", "register": "doc/parameter_register.csv", "backtestConfig": "backtest/config/backtest.json"},
   "universe": {"selection": "pit", "writeOff": 0.5, "stressWriteOffs": [0.0, 1.0], "finalCheck": "today"},
   "objectives": {"cagr": {"fold": "cvar", "worstShare": 0.30}, "drawdown": "span"},
-  "constraints": {"maxDrawdown": -0.30, "minFills": 300, "minFillsPerFoldYear": 15, "minAvgExposure": 0.40, "abortDrawdown": -0.35, "abortNoFillYears": 3},
+  "constraints": {"maxDrawdown": -0.40, "minFills": 300, "minFillsPerFoldYear": 15, "minAvgExposure": 0.25, "abortDrawdown": -0.45, "abortNoFillYears": 3},
   "ledger": {"effectiveNCap": 200, "clusterRhoMax": 0.5},
   "robust": {"top": 30, "neighbours": 16, "quantile": 0.25, "intStep": 1, "floatRel": 0.10,
              "stress": {"slippageMult": 2.0, "chargesMult": 1.3, "writeOff": 1.0, "delayDays": 1, "dropNames": 0.05}},

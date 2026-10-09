@@ -18,9 +18,11 @@ from app.analyst.broker import BrokerError, LoginFailed
 from app.analyst.common import Report
 from app.market import registry
 from app.market.common import IST
+from tests import fixtures
 
 LOG = logging.getLogger("test.ledger")
-CFG = common.load_config()
+with fixtures.pinned():
+    CFG = common.load_config()
 MON, TUE, WED, THU, FRI = (f"2026-09-{d}" for d in (21, 22, 23, 24, 25))
 
 

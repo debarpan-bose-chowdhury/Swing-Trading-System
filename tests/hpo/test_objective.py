@@ -15,6 +15,7 @@ from hpo import objective
 from tests.backtest.helpers import repo_config
 from tests.backtest.test_targets import World
 from tests.hpo.fakes import REPO, make_settings
+from tests import fixtures
 
 CFG = make_settings("hpo-data")
 
@@ -63,7 +64,7 @@ class ScoreTests(unittest.TestCase):
         rows = [{"nav": 100.0 * (1 + 0.001 * i), "date": f"d{i}"} for i in range(50)]
         mon(rows, 5)  # rising: fine
         with self.assertRaises(objective.AbortRun) as a:
-            mon(rows + [{"nav": rows[-1]["nav"] * 0.6, "date": "dX"}], 5)
+            mon(rows + [{"nav": rows[-1]["nav"] * (1 + CFG["constraints"]["abortDrawdown"] - 0.05), "date": "dX"}], 5)  # 5 points beyond the configured abort
         self.assertEqual((a.exception.reason, a.exception.asof), ("drawdown", "dX"))
         flat = [{"nav": 100.0, "date": f"d{i}"} for i in range(3 * 252 + 1)]
         with self.assertRaises(objective.AbortRun) as b:
@@ -91,7 +92,7 @@ class EngineCase(World):
 
     def setUp(self):
         super().setUp()
-        shutil.copytree(REPO / "app/config", "app/config", dirs_exist_ok=True)
+        fixtures.copy_app_config()
         Path("app/config/nse_calendar.json").write_text(json.dumps({"holidays": ["2021-01-01"], "specialSessions": []}))
         self.bt = repo_config()
         self.bt["overrides"]["risk"] = {"sizing": {"minNewOrderInr": 3000, "minAdjustmentInr": 1500}}

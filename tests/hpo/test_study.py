@@ -1,5 +1,6 @@
 """Study mechanics on a fake runner: budget, trial 0, determinism, resume equality, cache, failures, locks, cap, changed inputs, spawn pool."""
 
+import functools
 import io
 import json
 import os
@@ -12,7 +13,7 @@ from unittest.mock import patch
 from hpo import samplers, space as space_mod
 from hpo.errors import Busy, Failed, Refusal
 from hpo.study import Study, read_records
-from tests.hpo.fakes import FakeRunner, REPO, make_runner, make_settings
+from tests.hpo.fakes import CrashOnceRunner, FakeRunner, REPO, make_runner, make_settings
 from tests.hpo.test_space import load_space
 
 SPEC = {"name": "t1", "stage": "0", "sampler": "sobol", "active": ["stage:0"], "trials": 12, "seed": 3}
@@ -279,6 +280,14 @@ class PoolTests(StudyCase):
         recs = read_records(st.trials_path)
         self.assertEqual(sorted(r["trial"] for r in recs), list(range(8)))
         self.assertFalse((st.dir / "run.lock").exists())
+
+    def test_a_worker_that_dies_does_not_fail_the_trials_the_pool_is_rebuilt_and_they_run_again(self):
+        st = self.new(trials=8)
+        status = self.run_study(st, functools.partial(CrashOnceRunner, str(self.tmp / "crashed")), workers=2)
+        recs = read_records(st.trials_path)
+        self.assertEqual(status["state"], "finished")
+        self.assertEqual(sorted(r["trial"] for r in recs), list(range(8)))
+        self.assertFalse([r for r in recs if r["status"] == "fail"])
 
     def test_nothing_is_written_outside_the_data_folder(self):
         def snapshot():

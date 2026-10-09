@@ -7,6 +7,7 @@ per worker in the initialiser. One native thread per worker (api.limit_threads i
 
 import multiprocessing
 from concurrent.futures import Future, ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 
 from backtest import api
 
@@ -31,17 +32,34 @@ class EvalPool:
     """workers = 1 runs in the parent, one job at a time (deterministic, easy to debug); more start a spawn pool."""
 
     def __init__(self, factory, workers: int):
-        self.workers = workers
+        self.workers, self.factory = workers, factory
         if workers <= 1:
             self.runner, self.pool = factory(), None
         else:
             api.limit_threads()
             self.runner = None
-            self.pool = ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn"), initializer=_init, initargs=(factory,))
+            self.pool = self._start()
+
+    def _start(self) -> ProcessPoolExecutor:
+        return ProcessPoolExecutor(max_workers=self.workers, mp_context=multiprocessing.get_context("spawn"), initializer=_init, initargs=(self.factory,))
+
+    def restart(self, broken) -> None:
+        """One worker died (killed, out of memory): the executor fails every pending and later job for good. Replace it once per breakage (`broken` is the pool the failed job ran in)."""
+        if self.pool is broken:
+            broken.shutdown(wait=False, cancel_futures=True)
+            self.pool = self._start()
 
     def submit(self, job: dict) -> Future:
         if self.pool is not None:
-            return self.pool.submit(_run, job)
+            try:
+                pool = self.pool
+                fut = pool.submit(_run, job)
+            except BrokenProcessPool:
+                self.restart(pool)
+                pool = self.pool
+                fut = pool.submit(_run, job)
+            fut.pool = pool  # which executor ran it, so a BrokenProcessPool restarts that one only once
+            return fut
         fut: Future = Future()
         try:
             fut.set_result(self.runner.run(job))

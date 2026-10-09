@@ -14,6 +14,7 @@ from unittest.mock import patch
 from app.market.common import IST
 from app.risk import common
 from app.risk.common import Gate, Report
+from tests import fixtures
 from tests.app.risk_helpers import Env
 
 
@@ -50,7 +51,7 @@ class ShippedConfigTests(unittest.TestCase):
         self.assertEqual(Path("app/config/cash_flows.csv").read_text().strip(), "date,type,amount_inr,note")
 
     def test_the_shipped_defaults_match_the_tdd(self):
-        c = json.loads(Path("app/config/risk.json").read_text())
+        c = fixtures.load("risk.json")  # the pinned defaults; the live file is retuned by HPO
         self.assertEqual((c["sizing"]["riskPerPositionPct"], c["sizing"]["nameCapPct"], c["stops"]["atrMultiplier"], c["heat"]["capPct"]),
                          (0.0125, {"LargeCap": 0.10, "MidCap": 0.08, "SmallCap": 0.06}, 3.5, 0.12))
         self.assertEqual([(lv["drawdownPct"], lv["maxInvestedPct"]) for lv in c["ladder"]["levels"]], [(0.10, 0.75), (0.15, 0.5), (0.20, 0.25), (0.25, 0.0)])

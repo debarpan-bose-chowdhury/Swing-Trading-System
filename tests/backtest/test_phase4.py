@@ -24,9 +24,11 @@ from backtest import (
 )
 from tests.backtest.helpers import bars, repo_config, weekdays
 from tests.backtest.test_targets import World
+from tests import fixtures
 
 REPO = Path(__file__).resolve().parents[2]
-RISK_CFG = risk_common.load_config("run")
+with fixtures.pinned():
+    RISK_CFG = risk_common.load_config("run")
 SCHEDULE = json.loads((REPO / "backtest/config/backtest.json").read_text())["tax"]["schedule"]
 
 
@@ -152,7 +154,7 @@ class SingleRun(World):
 
     def setUp(self):
         super().setUp()  # changes into the temp working directory
-        shutil.copytree(REPO / "app/config", "app/config", dirs_exist_ok=True)
+        fixtures.copy_app_config()
         Path("app/config/nse_calendar.json").write_text(json.dumps({"holidays": ["2021-01-01"], "specialSessions": []}))  # weekdays only
         self.bt = repo_config()
         self.bt["overrides"]["risk"] = {"sizing": {"minNewOrderInr": 3000, "minAdjustmentInr": 1500}}

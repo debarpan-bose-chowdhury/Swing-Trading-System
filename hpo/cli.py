@@ -38,7 +38,7 @@ LATER = {}
 
 def _space(cfg: dict):
     from backtest import api
-    bt, risk, analyst = api.base_configs({"universe": {"mode": cfg["universe"]["selection"]}})
+    bt, risk, analyst = api.base_configs(settings.bt_overrides(cfg))
     return bt, space_mod.load(cfg, risk, analyst)
 
 
@@ -190,7 +190,7 @@ def cmd_probe(a, cfg) -> int:
 def cmd_capital(a, cfg) -> int:
     from hpo import capital
     from backtest import api
-    bt, risk, analyst = api.base_configs()
+    bt, risk, analyst = api.base_configs(settings.bt_overrides(cfg))
     r = capital.required(risk, analyst, a.price)
     print(f"live sizing: minimum new order Rs {r['minimumOrder']:,}; share price slack Rs {a.price:,.0f}; capital now: analyst Rs {analyst['capital']['floatingCapitalInr']:,}, backtest Rs {bt['capital']['inr']:,.0f}")
     print(_table([{"regime": x["regime"], "bucket": x["bucket"], "top_n": x["names"], "entry as % of NAV": round(100 * x["fraction"], 2), "limited by": x["limitedBy"], "capital needed": f"{x['needed']:,.0f}"} for x in r["rows"]],
