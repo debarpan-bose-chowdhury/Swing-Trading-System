@@ -16,9 +16,9 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 def repo_config() -> dict:
-    """The shipped backtest.json, read straight from the checkout (config.load() only reads inside the working directory, which the tests change)."""
+    """The pinned backtest.json (tests/fixtures/config), read straight from the checkout (config.load() only reads inside the working directory, which the tests change)."""
     from backtest import config
-    cfg = json.loads((REPO / "backtest/config/backtest.json").read_text(encoding="utf-8"))
+    cfg = json.loads((REPO / "tests/fixtures/config/backtest.json").read_text(encoding="utf-8"))
     config.validate(cfg)
     return cfg
 

@@ -1,0 +1,9 @@
+# Stage A: screen every searchable dimension with a Sobol sequence, then `python -m hpo.cli sensitivity --name sA` to decide what to freeze.
+# With D7 (per-bucket values) this is about 100 dimensions: 512 trials is the minimum that says anything; per-bucket offsets are included on purpose
+# (the TDD wants the screen to show whether offsets matter) but can be dropped with `exclude: ["prefix:analyst.strategies."]` + base dims only.
+name: sA
+stage: A
+sampler: sobol
+active: ["class:tunable"]
+trials: 512
+seed: 1

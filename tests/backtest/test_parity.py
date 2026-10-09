@@ -9,6 +9,7 @@ from app.market.tradingcal import Calendar
 from backtest import parity
 from backtest.targets import Targets
 from tests.backtest.test_targets import World
+from tests import fixtures
 
 
 class Helpers(unittest.TestCase):
@@ -121,8 +122,8 @@ class Cli(World):
         import shutil
 
         REPO = Path(__file__).resolve().parents[2]
-        shutil.copytree(REPO / "backtest/config", "backtest/config")
-        shutil.copytree(REPO / "app/config", "app/config")
+        fixtures.copy_backtest_config()
+        fixtures.copy_app_config()
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             code = parity.main(["--check"])

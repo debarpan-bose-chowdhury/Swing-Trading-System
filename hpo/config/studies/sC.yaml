@@ -1,0 +1,7 @@
+# Stage A, TPE, exposure floor recalibrated 40% -> 25% (no trial in sA/sB passed 40%; best 35%; idle cash earns 0 in the simulation).
+name: sC
+stage: A
+sampler: tpe
+active: ["class:tunable"]
+trials: 400
+seed: 3

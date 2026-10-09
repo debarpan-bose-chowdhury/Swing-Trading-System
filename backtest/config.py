@@ -18,6 +18,9 @@ def _is_date(v) -> bool:
         return False
 
 
+MIN_CAPITAL_INR = 100000  # the smallest starting capital accepted (backtest.json, --capital, hpo.json capital.inr)
+
+
 def _num(v, lo: float = 0, hi: float | None = None) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and v >= lo and (hi is None or v <= hi)
 
@@ -28,8 +31,8 @@ def validate(cfg: dict) -> None:
     if not (all(w[k] is None or _is_date(w[k]) for k in ("start", "end")) and isinstance(w["holdoutYears"], int) and w["holdoutYears"] >= 1):
         raise ValueError("window: start and end null or ISO dates, holdoutYears an integer of 1 or more")
     comp = cfg["capital"]["composition"]
-    if not _num(cfg["capital"]["inr"], 1) or abs(sum(comp.values()) - 1.0) > 0.001:
-        raise ValueError("capital: inr greater than 0 and composition summing to 1.0")
+    if not _num(cfg["capital"]["inr"], MIN_CAPITAL_INR) or abs(sum(comp.values()) - 1.0) > 0.001:
+        raise ValueError(f"capital: inr Rs {MIN_CAPITAL_INR:,} (1 lakh) or more and composition summing to 1.0")
     carry = cfg["fill"]["carryOverDays"]
     if cfg["fill"]["mode"] != "open" or not (carry is None or (isinstance(carry, int) and not isinstance(carry, bool) and carry >= 0)):
         raise ValueError("fill: only mode open is supported; carryOverDays null (use risk.json shadow.carryOverDays) or an integer of 0 or more")

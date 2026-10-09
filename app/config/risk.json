@@ -2,23 +2,23 @@
   "placeholders": false,
   "capital": { "cashFlowsFile": "app/config/cash_flows.csv", "reconcileField": null },
   "sizing": {
-    "riskPerPositionPct": 0.0125,
-    "nameCapPct": { "LargeCap": 0.10, "MidCap": 0.08, "SmallCap": 0.06 },
-    "minNewOrderInr": 25000,
-    "minAdjustmentInr": 10000,
+    "riskPerPositionPct": 0.0175,
+    "nameCapPct": { "LargeCap": 0.14, "MidCap": 0.08, "SmallCap": 0.09 },
+    "minNewOrderInr": 13000,
+    "minAdjustmentInr": 2400,
     "cashBufferPct": 0.02,
-    "noTradeBand": { "relative": 0.25, "absolutePct": 0.025, "floorPct": 0.025 },
+    "noTradeBand": { "relative": 0.2617627481, "absolutePct": 0.0374695434, "floorPct": 0.0253948907 },
     "countSaleProceeds": true
   },
   "stops": {
-    "atrPeriod": 20,
-    "atrMultiplier": 3.5,
+    "atrPeriod": 15,
+    "atrMultiplier": 3.0,
     "atrMethod": "sma",
     "priceBasis": "AdjClose",
-    "clampPct": { "LargeCap": [0.10, 0.18], "MidCap": [0.14, 0.22], "SmallCap": [0.18, 0.28] },
+    "clampPct": { "LargeCap": [0.09, 0.28], "MidCap": [0.21, 0.26], "SmallCap": [0.18, 0.29] },
     "bucketFallback": "SmallCap"
   },
-  "cooldown": { "stopTradingDays": 10, "reentryAboveStopClose": true },
+  "cooldown": { "stopTradingDays": 15, "reentryAboveStopClose": false },
   "ladder": {
     "levels": [
       { "drawdownPct": 0.10, "maxInvestedPct": 0.75 },
@@ -26,13 +26,13 @@
       { "drawdownPct": 0.20, "maxInvestedPct": 0.25 },
       { "drawdownPct": 0.25, "maxInvestedPct": 0.0 }
     ],
-    "reRisk": { "regimes": ["BULL", "TREND"], "consecutiveWeeks": 2, "navAboveMinOfPreviousDays": 20, "rungsPerWeek": 1 },
+    "reRisk": { "regimes": ["BULL", "TREND"], "consecutiveWeeks": 2, "navAboveMinOfPreviousDays": 23, "rungsPerWeek": 2 },
     "restartFrom": null,
     "restartRungOffset": 1
   },
-  "exposure": { "regimeCap": { "BULL": 1.0, "TREND": 1.0, "WEAK": 1.0, "BEAR": 1.0, "Unknown": 1.0 } },
+  "exposure": { "regimeCap": { "BULL": 0.7417869526, "TREND": 0.1352134645, "WEAK": 0.9130432713, "BEAR": 0.368233584, "Unknown": 0.6247319746 } },
   "heat": { "capPct": 0.12 },
-  "liquidity": { "advDays": 20, "maxParticipationPct": { "LargeCap": 0.01, "MidCap": 0.01, "SmallCap": 0.005 } },
+  "liquidity": { "advDays": 37, "maxParticipationPct": { "LargeCap": 0.0058493283, "MidCap": 0.0026198035, "SmallCap": 0.0040095805 } },
   "surveillance": {
     "sources": {
       "asm":   {"url": "https://www.nseindia.com/api/reportASM?csv=true",                          "format": "csv", "symbolColumn": "SYMBOL",  "valueColumn": "ASM STAGE"},
@@ -49,7 +49,7 @@
     "retryUntil": "22:15"
   },
   "tax": {
-    "deferral": { "enabled": true, "windowDays": 28, "minGainPct": 0.10, "requireAboveTrend": true },
+    "deferral": { "enabled": true, "windowDays": 52, "minGainPct": 0.110000689, "requireAboveTrend": true },
     "rates": { "asOf": "2026-10-02", "stcgPct": 0.20, "ltcgPct": 0.125, "ltcgExemptionInr": 125000, "cessPct": 0.04 }
   },
   "gate": { "maxMissingShare": 0.10, "maxLedgerLagTradingDays": 0, "targetsWaitUntil": "Sun 22:00", "retryUntil": "08:00" },

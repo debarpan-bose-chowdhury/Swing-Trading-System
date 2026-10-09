@@ -13,13 +13,15 @@ from unittest.mock import patch
 
 from app.analyst import common, costs
 from app.market.common import IST
+from tests import fixtures
 
 LOG = logging.getLogger("test.analyst")
 NOW = datetime(2026, 10, 2, 21, 30, tzinfo=IST)
 
 
 def cfg() -> dict:
-    return common.load_config()
+    with fixtures.pinned():
+        return common.load_config()
 
 
 class ValidationTests(unittest.TestCase):
@@ -93,8 +95,9 @@ class RunStageTests(unittest.TestCase):
         self.addCleanup(os.chdir, self._cwd)
         root = Path(self.tmp.name)
         (root / "app/config").mkdir(parents=True)
-        for f in ("analyst.json", "config.json", "nse_calendar.json"):
+        for f in ("config.json", "nse_calendar.json"):
             (root / "app/config" / f).write_text((Path(self._cwd) / "app/config" / f).read_text(encoding="utf-8"), encoding="utf-8")
+        (root / "app/config/analyst.json").write_text(fixtures.text("analyst.json"), encoding="utf-8")
         os.chdir(root)
         self.root = root
 

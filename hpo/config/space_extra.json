@@ -1,0 +1,14 @@
+{
+  "note": "PROPOSED bounds for the register rows that have none, and the derived (reparameterised) dimensions. Review at register review; the schema is regenerated with `python -m hpo.cli space build`.",
+  "bounds": {
+    "analyst:selector.liquidity.windowDays": {"low": 10, "high": 60, "step": 5},
+    "risk:sizing.minAdjRatio": {"low": 0.1, "high": 1.0},
+    "risk:stops.clampLo": {"low": 0.05, "high": 0.30, "step": 0.01},
+    "risk:stops.clampWidth": {"low": 0.02, "high": 0.20, "step": 0.01},
+    "risk:ladder.gap": {"low": 0.02, "step": 0.01}
+  },
+  "log": ["lookback", "advDays", "minNewOrderInr", "atrPeriod", "liquidity.windowDays", "minAdvCr"],
+  "stages": {"sizing": 2, "selector": 1, "stops": 2, "cooldown": 2, "ladder": 2, "exposure": 2, "liquidity": 2, "tax": 2, "heat": 2, "regime": 3, "composition": 3},
+  "stageZero": ["risk.sizing.riskPerPositionPct", "risk.sizing.nameCapPct.LargeCap", "risk.sizing.nameCapPct.MidCap", "risk.sizing.nameCapPct.SmallCap",
+                "risk.sizing.minNewOrderInr", "risk.sizing.minAdjRatio"]
+}

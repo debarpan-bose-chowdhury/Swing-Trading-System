@@ -17,9 +17,11 @@ from app.analyst.common import Gate, Report
 from app.market import registry
 from app.market.common import COLS, IST
 from app.market.store import Store
+from tests import fixtures
 
 LOG = logging.getLogger("test.signals")
-CFG = common.load_config()  # read before the tests change the working directory
+with fixtures.pinned():
+    CFG = common.load_config()  # read before the tests change the working directory
 META = Path("app/config/config.json").read_text(encoding="utf-8")
 FRIDAY = "2026-09-25"
 NOW = datetime(2026, 9, 25, 21, 30, tzinfo=IST)

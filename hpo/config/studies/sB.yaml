@@ -1,0 +1,7 @@
+# Stage A, TPE (constrained): the Sobol screen sA found 0 feasible of 44 (best exposure 28% vs the 40% floor, every CAGR ~0); TPE uses the constraint violation sizes to move toward feasibility.
+name: sB
+stage: A
+sampler: tpe
+active: ["class:tunable"]
+trials: 400
+seed: 2

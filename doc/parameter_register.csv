@@ -2,27 +2,27 @@ path,file,current,kind,bounds,scale,class,group,affects,parity_test,note
 risk:placeholders,app/config/risk.json,false,bool,,,operational,run-gate,live,,
 risk:capital.cashFlowsFile,app/config/risk.json,"""app/config/cash_flows.csv""",str,,,operational,capital,live,,cash-flow file and reconcile field
 risk:capital.reconcileField,app/config/risk.json,null,null,,,operational,capital,live,,cash-flow file and reconcile field
-risk:sizing.riskPerPositionPct,app/config/risk.json,0.0125,float,0.005..0.025 step 0.0025 (params.json sizing.riskPerPositionPct),linear,tunable,sizing,both,,
-risk:sizing.nameCapPct.LargeCap,app/config/risk.json,0.1,float,0.06..0.15 step 0.01 (params.json sizing.nameCap.LargeCap),linear,tunable,sizing,both,,bounded by the policy maximum of the bucket
+risk:sizing.riskPerPositionPct,app/config/risk.json,0.0175,float,0.005..0.025 step 0.0025 (params.json sizing.riskPerPositionPct),linear,tunable,sizing,both,,
+risk:sizing.nameCapPct.LargeCap,app/config/risk.json,0.14,float,0.06..0.15 step 0.01 (params.json sizing.nameCap.LargeCap),linear,tunable,sizing,both,,bounded by the policy maximum of the bucket
 risk:sizing.nameCapPct.MidCap,app/config/risk.json,0.08,float,0.04..0.12 step 0.01 (params.json sizing.nameCap.MidCap),linear,tunable,sizing,both,,bounded by the policy maximum of the bucket
-risk:sizing.nameCapPct.SmallCap,app/config/risk.json,0.06,float,0.03..0.1 step 0.01 (params.json sizing.nameCap.SmallCap),linear,tunable,sizing,both,,bounded by the policy maximum of the bucket
-risk:sizing.minNewOrderInr,app/config/risk.json,25000,int,2000..10000 step 1000 (params.json sizing.minNewOrderInr),log,tunable,sizing,both,,scales with capital: at Rs 1 lakh the live value makes 0 trades
-risk:sizing.minAdjustmentInr,app/config/risk.json,10000,int,1000..5000 step 500 (params.json sizing.minAdjustmentInr),log,tunable,sizing,both,,constraint: not above minNewOrderInr
+risk:sizing.nameCapPct.SmallCap,app/config/risk.json,0.09,float,0.03..0.1 step 0.01 (params.json sizing.nameCap.SmallCap),linear,tunable,sizing,both,,bounded by the policy maximum of the bucket
+risk:sizing.minNewOrderInr,app/config/risk.json,13000,int,2000..10000 step 1000 (params.json sizing.minNewOrderInr),log,tunable,sizing,both,,scales with capital: at Rs 1 lakh the live value makes 0 trades
+risk:sizing.minAdjustmentInr,app/config/risk.json,2400,int,1000..5000 step 500 (params.json sizing.minAdjustmentInr),log,tunable,sizing,both,,constraint: not above minNewOrderInr
 risk:sizing.cashBufferPct,app/config/risk.json,0.02,float,0.01..0.05 step 0.01 (params.json sizing.cashBuffer),,risk-limit,sizing,both,,
-risk:sizing.noTradeBand.relative,app/config/risk.json,0.25,float,proposed 0.1..0.5,linear,tunable,sizing,both,,
-risk:sizing.noTradeBand.absolutePct,app/config/risk.json,0.025,float,proposed 0.0..0.05,linear,tunable,sizing,both,,no effect below floorPct (H7)
-risk:sizing.noTradeBand.floorPct,app/config/risk.json,0.025,float,proposed 0.0..0.05,linear,tunable,sizing,both,tests/app/test_risk_sizer.py::ResizeTests::test_h7_*,H7: was the hidden 0.025 in sizer.plan_sells
+risk:sizing.noTradeBand.relative,app/config/risk.json,0.2617627481,float,proposed 0.1..0.5,linear,tunable,sizing,both,,
+risk:sizing.noTradeBand.absolutePct,app/config/risk.json,0.0374695434,float,proposed 0.0..0.05,linear,tunable,sizing,both,,no effect below floorPct (H7)
+risk:sizing.noTradeBand.floorPct,app/config/risk.json,0.0253948907,float,proposed 0.0..0.05,linear,tunable,sizing,both,tests/app/test_risk_sizer.py::ResizeTests::test_h7_*,H7: was the hidden 0.025 in sizer.plan_sells
 risk:sizing.countSaleProceeds,app/config/risk.json,true,bool,,,model-input,sizing,both,,bool: whether same-day sale proceeds fund buys (settlement assumption)
-risk:stops.atrPeriod,app/config/risk.json,20,int,10..30 step 5 (params.json stops.atrPeriod),int,tunable,stops,both,,
-risk:stops.atrMultiplier,app/config/risk.json,3.5,float,2.5..4.5 step 0.5 (params.json stops.atrMultiplier),linear,tunable,stops,both,,
+risk:stops.atrPeriod,app/config/risk.json,15,int,10..30 step 5 (params.json stops.atrPeriod),int,tunable,stops,both,,
+risk:stops.atrMultiplier,app/config/risk.json,3.0,float,2.5..4.5 step 0.5 (params.json stops.atrMultiplier),linear,tunable,stops,both,,
 risk:stops.atrMethod,app/config/risk.json,"""sma""",str,,,structural,stops,both,tests/app/test_risk_common.py::test_dead_stop_keys_must_hold_the_only_implemented_values,validated: only sma is implemented
 risk:stops.priceBasis,app/config/risk.json,"""AdjClose""",str,,,structural,stops,both,tests/app/test_risk_common.py::test_dead_stop_keys_must_hold_the_only_implemented_values,validated: only AdjClose is implemented
-risk:stops.clampPct.LargeCap,app/config/risk.json,"[0.1, 0.18]",list,,linear,tunable,stops,both,,"[lo, hi] per bucket, 0 < lo < hi < 1"
-risk:stops.clampPct.MidCap,app/config/risk.json,"[0.14, 0.22]",list,,linear,tunable,stops,both,,"[lo, hi] per bucket, 0 < lo < hi < 1"
-risk:stops.clampPct.SmallCap,app/config/risk.json,"[0.18, 0.28]",list,,linear,tunable,stops,both,,"[lo, hi] per bucket, 0 < lo < hi < 1"
+risk:stops.clampPct.LargeCap,app/config/risk.json,"[0.09, 0.28]",list,,linear,tunable,stops,both,,"[lo, hi] per bucket, 0 < lo < hi < 1"
+risk:stops.clampPct.MidCap,app/config/risk.json,"[0.21, 0.26]",list,,linear,tunable,stops,both,,"[lo, hi] per bucket, 0 < lo < hi < 1"
+risk:stops.clampPct.SmallCap,app/config/risk.json,"[0.18, 0.29]",list,,linear,tunable,stops,both,,"[lo, hi] per bucket, 0 < lo < hi < 1"
 risk:stops.bucketFallback,app/config/risk.json,"""SmallCap""",str,,,structural,stops,both,,
-risk:cooldown.stopTradingDays,app/config/risk.json,10,int,5..20 step 5 (params.json cooldown.stopTradingDays),int,tunable,cooldown,both,,
-risk:cooldown.reentryAboveStopClose,app/config/risk.json,true,bool,bool,,tunable,cooldown,both,,bool
+risk:cooldown.stopTradingDays,app/config/risk.json,15,int,5..20 step 5 (params.json cooldown.stopTradingDays),int,tunable,cooldown,both,,
+risk:cooldown.reentryAboveStopClose,app/config/risk.json,false,bool,bool,,tunable,cooldown,both,,bool
 risk:ladder.levels.0.drawdownPct,app/config/risk.json,0.1,float,0.06..0.14 step 0.02 (params.json ladder.drawdown1),,risk-limit,ladder,both,,drawdown rung or invested cap: unfreeze per study with a report warning
 risk:ladder.levels.0.maxInvestedPct,app/config/risk.json,0.75,float,0.65..0.85 step 0.05 (params.json ladder.invested1),,risk-limit,ladder,both,,drawdown rung or invested cap: unfreeze per study with a report warning
 risk:ladder.levels.1.drawdownPct,app/config/risk.json,0.15,float,0.11..0.19 step 0.02 (params.json ladder.drawdown2),,risk-limit,ladder,both,,drawdown rung or invested cap: unfreeze per study with a report warning
@@ -33,20 +33,20 @@ risk:ladder.levels.3.drawdownPct,app/config/risk.json,0.25,float,0.21..0.29 step
 risk:ladder.levels.3.maxInvestedPct,app/config/risk.json,0.0,float,,,risk-limit,ladder,both,,drawdown rung or invested cap: unfreeze per study with a report warning
 risk:ladder.reRisk.regimes,app/config/risk.json,"[""BULL"", ""TREND""]",list,,,structural,ladder,both,,
 risk:ladder.reRisk.consecutiveWeeks,app/config/risk.json,2,int,proposed 1..4,int,tunable,ladder,both,,
-risk:ladder.reRisk.navAboveMinOfPreviousDays,app/config/risk.json,20,int,proposed 10..40,int,tunable,ladder,both,,
-risk:ladder.reRisk.rungsPerWeek,app/config/risk.json,1,int,proposed 1..2,int,tunable,ladder,both,tests/app/test_risk_ladder.py::ExposedLadderNumbers,H8: was one rung per week
+risk:ladder.reRisk.navAboveMinOfPreviousDays,app/config/risk.json,23,int,proposed 10..40,int,tunable,ladder,both,,
+risk:ladder.reRisk.rungsPerWeek,app/config/risk.json,2,int,proposed 1..2,int,tunable,ladder,both,tests/app/test_risk_ladder.py::ExposedLadderNumbers,H8: was one rung per week
 risk:ladder.restartFrom,app/config/risk.json,null,null,,,operational,ladder,live,,the owner's manual restart date
 risk:ladder.restartRungOffset,app/config/risk.json,1,int,proposed 1..2,int,tunable,ladder,both,tests/app/test_risk_ladder.py::ExposedLadderNumbers,H8: a restart resumes top - offset
-risk:exposure.regimeCap.BULL,app/config/risk.json,1.0,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
-risk:exposure.regimeCap.TREND,app/config/risk.json,1.0,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
-risk:exposure.regimeCap.WEAK,app/config/risk.json,1.0,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
-risk:exposure.regimeCap.BEAR,app/config/risk.json,1.0,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
-risk:exposure.regimeCap.Unknown,app/config/risk.json,1.0,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
+risk:exposure.regimeCap.BULL,app/config/risk.json,0.7417869526,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
+risk:exposure.regimeCap.TREND,app/config/risk.json,0.1352134645,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
+risk:exposure.regimeCap.WEAK,app/config/risk.json,0.9130432713,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
+risk:exposure.regimeCap.BEAR,app/config/risk.json,0.368233584,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
+risk:exposure.regimeCap.Unknown,app/config/risk.json,0.6247319746,float,0..1,linear,tunable,exposure,both,,"inert today (all 1.0); search range [0, 1] to be confirmed by the owner"
 risk:heat.capPct,app/config/risk.json,0.12,float,0.06..0.2 step 0.02 (params.json sizing.heatCap),,risk-limit,sizing,both,,
-risk:liquidity.advDays,app/config/risk.json,20,int,proposed 10..60,int,tunable,liquidity,both,,
-risk:liquidity.maxParticipationPct.LargeCap,app/config/risk.json,0.01,float,proposed 0.002..0.02,log,tunable,liquidity,both,,
-risk:liquidity.maxParticipationPct.MidCap,app/config/risk.json,0.01,float,proposed 0.002..0.02,log,tunable,liquidity,both,,
-risk:liquidity.maxParticipationPct.SmallCap,app/config/risk.json,0.005,float,proposed 0.002..0.02,log,tunable,liquidity,both,,
+risk:liquidity.advDays,app/config/risk.json,37,int,proposed 10..60,int,tunable,liquidity,both,,
+risk:liquidity.maxParticipationPct.LargeCap,app/config/risk.json,0.0058493283,float,proposed 0.002..0.02,log,tunable,liquidity,both,,
+risk:liquidity.maxParticipationPct.MidCap,app/config/risk.json,0.0026198035,float,proposed 0.002..0.02,log,tunable,liquidity,both,,
+risk:liquidity.maxParticipationPct.SmallCap,app/config/risk.json,0.0040095805,float,proposed 0.002..0.02,log,tunable,liquidity,both,,
 risk:surveillance.sources.asm.url,app/config/risk.json,"""https://www.nseindia.com/api/reportASM?csv=true""",str,,,regulatory,surveillance,live,,
 risk:surveillance.sources.asm.format,app/config/risk.json,"""csv""",str,,,regulatory,surveillance,live,,
 risk:surveillance.sources.asm.symbolColumn,app/config/risk.json,"""SYMBOL""",str,,,regulatory,surveillance,live,,
@@ -72,8 +72,8 @@ risk:surveillance.backoffSeconds,app/config/risk.json,"[2, 4, 8]",list,,,operati
 risk:surveillance.runTime,app/config/risk.json,"""20:15""",str,,,operational,surveillance,live,,
 risk:surveillance.retryUntil,app/config/risk.json,"""22:15""",str,,,operational,surveillance,live,,
 risk:tax.deferral.enabled,app/config/risk.json,true,bool,,,regulatory,tax,both,,the 12-month rule's mechanics
-risk:tax.deferral.windowDays,app/config/risk.json,28,int,proposed 14..56,int,tunable,tax,both,,
-risk:tax.deferral.minGainPct,app/config/risk.json,0.1,float,proposed 0.05..0.25,linear,tunable,tax,both,,
+risk:tax.deferral.windowDays,app/config/risk.json,52,int,proposed 14..56,int,tunable,tax,both,,
+risk:tax.deferral.minGainPct,app/config/risk.json,0.110000689,float,proposed 0.05..0.25,linear,tunable,tax,both,,
 risk:tax.deferral.requireAboveTrend,app/config/risk.json,true,bool,,,regulatory,tax,both,,the 12-month rule's mechanics
 risk:tax.rates.asOf,app/config/risk.json,"""2026-10-02""",str,,,regulatory,tax,live,,
 risk:tax.rates.stcgPct,app/config/risk.json,0.2,float,,,regulatory,tax,live,,
@@ -120,79 +120,79 @@ analyst:broker.loginRetryGapSeconds,app/config/analyst.json,60,int,,,operational
 analyst:broker.clientLocalIp,app/config/analyst.json,"""127.0.0.1""",str,,,operational,broker,live,,
 analyst:broker.clientPublicIp,app/config/analyst.json,"""127.0.0.1""",str,,,operational,broker,live,,
 analyst:broker.clientMacAddress,app/config/analyst.json,"""00:00:00:00:00:00""",str,,,operational,broker,live,,
-analyst:capital.floatingCapitalInr,app/config/analyst.json,100000,int,,,design,capital,both,,
+analyst:capital.floatingCapitalInr,app/config/analyst.json,450000,int,,,design,capital,both,,
 analyst:capital.ignoreSymbols,app/config/analyst.json,[],list,,,operational,capital,live,,
 analyst:limits.maxPositionDrawdownPct,app/config/analyst.json,0.17,float,,,risk-limit,limits,live,,live-monitoring limits
 analyst:limits.maxPortfolioDrawdownPct,app/config/analyst.json,0.5,float,,,risk-limit,limits,live,,live-monitoring limits
-analyst:composition.LargeCap,app/config/analyst.json,0.5,float,simplex over the buckets,simplex,tunable,composition,both,,a weight of 0 disables a bucket; must sum to 1
-analyst:composition.MidCap,app/config/analyst.json,0.3,float,simplex over the buckets,simplex,tunable,composition,both,,a weight of 0 disables a bucket; must sum to 1
-analyst:composition.SmallCap,app/config/analyst.json,0.2,float,simplex over the buckets,simplex,tunable,composition,both,,a weight of 0 disables a bucket; must sum to 1
+analyst:composition.LargeCap,app/config/analyst.json,0.44,float,simplex over the buckets,simplex,tunable,composition,both,,a weight of 0 disables a bucket; must sum to 1
+analyst:composition.MidCap,app/config/analyst.json,0.32,float,simplex over the buckets,simplex,tunable,composition,both,,a weight of 0 disables a bucket; must sum to 1
+analyst:composition.SmallCap,app/config/analyst.json,0.24,float,simplex over the buckets,simplex,tunable,composition,both,,a weight of 0 disables a bucket; must sum to 1
 analyst:rebalance.schedule,app/config/analyst.json,"""weekly""",str,,,structural,rebalance,both,,
 analyst:rebalance.execution,app/config/analyst.json,"""monday_open""",str,,,structural,rebalance,both,,
 analyst:regime.index,app/config/analyst.json,"""^NSEI""",str,,,structural,regime,both,,
 analyst:regime.persistenceWeeks,app/config/analyst.json,4,int,2..6 step 1 (params.json regime.persistenceWeeks),int,tunable,regime,both,,"regime stage, narrow bounds"
 analyst:regime.minRows,app/config/analyst.json,210,int,,,structural,regime,both,,"must be >= max(smaSlow, momentumDays) + unknownExtra + 1"
-analyst:regime.smaFast,app/config/analyst.json,50,int,30..70 step 10 (params.json regime.smaFast),int,tunable,regime,both,,"regime stage, narrow bounds"
-analyst:regime.smaSlow,app/config/analyst.json,200,int,150..250 step 25 (params.json regime.smaSlow),int,tunable,regime,both,,"regime stage, narrow bounds"
-analyst:regime.momentumDays,app/config/analyst.json,63,int,42..84 step 21 (params.json regime.momentumDays),int,tunable,regime,both,,"regime stage, narrow bounds"
-analyst:regime.momentumThreshold,app/config/analyst.json,0.0,float,proposed -0.05..0.05,linear,tunable,regime,both,tests/app/test_analyst_regime.py::ExposedRegimeNumbers,H5
-analyst:regime.unknownExtra,app/config/analyst.json,9,int,proposed 0..20,int,tunable,regime,both,tests/app/test_analyst_regime.py::ExposedRegimeNumbers,H6: warm-up length
+analyst:regime.smaFast,app/config/analyst.json,30,int,30..70 step 10 (params.json regime.smaFast),int,tunable,regime,both,,"regime stage, narrow bounds"
+analyst:regime.smaSlow,app/config/analyst.json,150,int,150..250 step 25 (params.json regime.smaSlow),int,tunable,regime,both,,"regime stage, narrow bounds"
+analyst:regime.momentumDays,app/config/analyst.json,42,int,42..84 step 21 (params.json regime.momentumDays),int,tunable,regime,both,,"regime stage, narrow bounds"
+analyst:regime.momentumThreshold,app/config/analyst.json,-0.031651085,float,proposed -0.05..0.05,linear,tunable,regime,both,tests/app/test_analyst_regime.py::ExposedRegimeNumbers,H5
+analyst:regime.unknownExtra,app/config/analyst.json,16,int,proposed 0..20,int,tunable,regime,both,tests/app/test_analyst_regime.py::ExposedRegimeNumbers,H6: warm-up length
 analyst:strategies.BULL.LargeCap.top_n,app/config/analyst.json,2,int,1..4 step 1 (params.json selector.topN.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BULL.LargeCap.lookback,app/config/analyst.json,126,int,63..189 step 21 (params.json selector.lookback.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BULL.LargeCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BULL.MidCap.top_n,app/config/analyst.json,2,int,1..4 step 1 (params.json selector.topN.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BULL.MidCap.lookback,app/config/analyst.json,126,int,63..189 step 21 (params.json selector.lookback.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BULL.MidCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BULL.SmallCap.top_n,app/config/analyst.json,2,int,1..4 step 1 (params.json selector.topN.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BULL.SmallCap.lookback,app/config/analyst.json,126,int,63..189 step 21 (params.json selector.lookback.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BULL.SmallCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.TREND.LargeCap.top_n,app/config/analyst.json,4,int,2..6 step 1 (params.json selector.topN.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.LargeCap.lookback,app/config/analyst.json,189,int,63..189 step 21 (params.json selector.lookback.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.LargeCap.stock_trend_ma,app/config/analyst.json,100,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.MidCap.top_n,app/config/analyst.json,3,int,1..4 step 1 (params.json selector.topN.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.MidCap.lookback,app/config/analyst.json,168,int,63..189 step 21 (params.json selector.lookback.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.MidCap.stock_trend_ma,app/config/analyst.json,100,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.SmallCap.top_n,app/config/analyst.json,3,int,1..4 step 1 (params.json selector.topN.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.SmallCap.lookback,app/config/analyst.json,189,int,63..189 step 21 (params.json selector.lookback.BULL),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BULL.SmallCap.stock_trend_ma,app/config/analyst.json,100,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.LargeCap.top_n,app/config/analyst.json,2,int,2..6 step 1 (params.json selector.topN.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
 analyst:strategies.TREND.LargeCap.lookback,app/config/analyst.json,168,int,126..210 step 21 (params.json selector.lookback.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.TREND.LargeCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.TREND.MidCap.top_n,app/config/analyst.json,4,int,2..6 step 1 (params.json selector.topN.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.TREND.MidCap.lookback,app/config/analyst.json,168,int,126..210 step 21 (params.json selector.lookback.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.TREND.MidCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.TREND.SmallCap.top_n,app/config/analyst.json,4,int,2..6 step 1 (params.json selector.topN.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.TREND.SmallCap.lookback,app/config/analyst.json,168,int,126..210 step 21 (params.json selector.lookback.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.LargeCap.stock_trend_ma,app/config/analyst.json,175,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.MidCap.top_n,app/config/analyst.json,2,int,2..6 step 1 (params.json selector.topN.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.MidCap.lookback,app/config/analyst.json,189,int,126..210 step 21 (params.json selector.lookback.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.MidCap.stock_trend_ma,app/config/analyst.json,175,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.SmallCap.top_n,app/config/analyst.json,3,int,2..6 step 1 (params.json selector.topN.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.TREND.SmallCap.lookback,app/config/analyst.json,189,int,126..210 step 21 (params.json selector.lookback.TREND),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
 analyst:strategies.TREND.SmallCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.WEAK.LargeCap.top_n,app/config/analyst.json,6,int,3..9 step 1 (params.json selector.topN.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.LargeCap.top_n,app/config/analyst.json,8,int,3..9 step 1 (params.json selector.topN.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
 analyst:strategies.WEAK.LargeCap.lookback,app/config/analyst.json,84,int,42..126 step 21 (params.json selector.lookback.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.WEAK.LargeCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.WEAK.MidCap.top_n,app/config/analyst.json,6,int,3..9 step 1 (params.json selector.topN.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.WEAK.MidCap.lookback,app/config/analyst.json,84,int,42..126 step 21 (params.json selector.lookback.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.WEAK.MidCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.WEAK.SmallCap.top_n,app/config/analyst.json,6,int,3..9 step 1 (params.json selector.topN.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.WEAK.SmallCap.lookback,app/config/analyst.json,84,int,42..126 step 21 (params.json selector.lookback.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.LargeCap.stock_trend_ma,app/config/analyst.json,175,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.MidCap.top_n,app/config/analyst.json,9,int,3..9 step 1 (params.json selector.topN.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.MidCap.lookback,app/config/analyst.json,105,int,42..126 step 21 (params.json selector.lookback.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.MidCap.stock_trend_ma,app/config/analyst.json,200,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.SmallCap.top_n,app/config/analyst.json,7,int,3..9 step 1 (params.json selector.topN.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.WEAK.SmallCap.lookback,app/config/analyst.json,105,int,42..126 step 21 (params.json selector.lookback.WEAK),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
 analyst:strategies.WEAK.SmallCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BEAR.LargeCap.top_n,app/config/analyst.json,8,int,4..12 step 1 (params.json selector.topN.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BEAR.LargeCap.lookback,app/config/analyst.json,63,int,42..84 step 21 (params.json selector.lookback.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.LargeCap.top_n,app/config/analyst.json,5,int,4..12 step 1 (params.json selector.topN.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.LargeCap.lookback,app/config/analyst.json,84,int,42..84 step 21 (params.json selector.lookback.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
 analyst:strategies.BEAR.LargeCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BEAR.MidCap.top_n,app/config/analyst.json,8,int,4..12 step 1 (params.json selector.topN.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BEAR.MidCap.lookback,app/config/analyst.json,63,int,42..84 step 21 (params.json selector.lookback.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.MidCap.top_n,app/config/analyst.json,6,int,4..12 step 1 (params.json selector.topN.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.MidCap.lookback,app/config/analyst.json,84,int,42..84 step 21 (params.json selector.lookback.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
 analyst:strategies.BEAR.MidCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BEAR.SmallCap.top_n,app/config/analyst.json,8,int,4..12 step 1 (params.json selector.topN.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BEAR.SmallCap.lookback,app/config/analyst.json,63,int,42..84 step 21 (params.json selector.lookback.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
-analyst:strategies.BEAR.SmallCap.stock_trend_ma,app/config/analyst.json,150,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.SmallCap.top_n,app/config/analyst.json,6,int,4..12 step 1 (params.json selector.topN.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.SmallCap.lookback,app/config/analyst.json,84,int,42..84 step 21 (params.json selector.lookback.BEAR),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
+analyst:strategies.BEAR.SmallCap.stock_trend_ma,app/config/analyst.json,175,int,100..200 step 25 (params.json selector.trendMa),int,tunable,selector,both,,per regime and bucket (params.json shares them across buckets)
 analyst:selector.maxStaleTradingDays,app/config/analyst.json,0,int,,,operational,gates,live,,
 analyst:selector.maxBucketFileAgeDays,app/config/analyst.json,7,int,,,operational,gates,live,,
 analyst:selector.maxMissingShare,app/config/analyst.json,0.1,float,,,operational,gates,live,,
-analyst:selector.momentumSkipDays,app/config/analyst.json,0,int,proposed 0..21,int,tunable,selector,both,,
-analyst:selector.minMomentum,app/config/analyst.json,0.0,float,proposed 0.0..0.1,linear,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,"H2: candidate filter, all regimes"
-analyst:selector.trendBuffer,app/config/analyst.json,0.0,float,proposed 0.0..0.05,linear,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H3: price > trend x (1 + buffer)
-analyst:selector.liquidity.windowDays,app/config/analyst.json,20,int,,int,tunable,selector,both,,
-analyst:selector.liquidity.minAdvCr,app/config/analyst.json,10,int,5..20 step 5 (params.json selector.minAdvCr),int,tunable,selector,both,,
+analyst:selector.momentumSkipDays,app/config/analyst.json,8,int,proposed 0..21,int,tunable,selector,both,,
+analyst:selector.minMomentum,app/config/analyst.json,0.0920172921,float,proposed 0.0..0.1,linear,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,"H2: candidate filter, all regimes"
+analyst:selector.trendBuffer,app/config/analyst.json,0.0344292143,float,proposed 0.0..0.05,linear,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H3: price > trend x (1 + buffer)
+analyst:selector.liquidity.windowDays,app/config/analyst.json,15,int,,int,tunable,selector,both,,
+analyst:selector.liquidity.minAdvCr,app/config/analyst.json,15,int,5..20 step 5 (params.json selector.minAdvCr),int,tunable,selector,both,,
 analyst:selector.liquidity.statistic,app/config/analyst.json,"""median""",str,,,structural,selector,both,,
-analyst:selector.bearScore.mom20,app/config/analyst.json,0.4,float,0.2..0.6 step 0.1 (params.json selector.bear.mom20),linear,tunable,selector,both,,score weight
-analyst:selector.bearScore.mom63,app/config/analyst.json,0.35,float,0.15..0.55 step 0.1 (params.json selector.bear.mom63),linear,tunable,selector,both,,score weight
-analyst:selector.bearScore.hit20,app/config/analyst.json,0.2,float,0.0..0.4 step 0.1 (params.json selector.bear.hit20),linear,tunable,selector,both,,score weight
-analyst:selector.bearScore.vol20,app/config/analyst.json,-0.35,float,-0.55..-0.15 step 0.1 (params.json selector.bear.vol20),linear,tunable,selector,both,,score weight
-analyst:selector.bearScore.dd63,app/config/analyst.json,0.1,float,0.0..0.3 step 0.1 (params.json selector.bear.dd63),linear,tunable,selector,both,,score weight
-analyst:selector.bearScore.windows.shortDays,app/config/analyst.json,20,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
-analyst:selector.bearScore.windows.longDays,app/config/analyst.json,63,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
-analyst:selector.bearScore.windows.hitDays,app/config/analyst.json,20,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
-analyst:selector.bearScore.windows.volDays,app/config/analyst.json,20,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
-analyst:selector.bearScore.windows.ddDays,app/config/analyst.json,63,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
-analyst:selector.bearScore.confirmThreshold,app/config/analyst.json,0.0,float,proposed 0.0..0.05,linear,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H4: BEAR tier confirmation
+analyst:selector.bearScore.mom20,app/config/analyst.json,0.4702495703,float,0.2..0.6 step 0.1 (params.json selector.bear.mom20),linear,tunable,selector,both,,score weight
+analyst:selector.bearScore.mom63,app/config/analyst.json,0.6720478147,float,0.15..0.55 step 0.1 (params.json selector.bear.mom63),linear,tunable,selector,both,,score weight
+analyst:selector.bearScore.hit20,app/config/analyst.json,0.1091116956,float,0.0..0.4 step 0.1 (params.json selector.bear.hit20),linear,tunable,selector,both,,score weight
+analyst:selector.bearScore.vol20,app/config/analyst.json,-0.1337631785,float,-0.55..-0.15 step 0.1 (params.json selector.bear.vol20),linear,tunable,selector,both,,score weight
+analyst:selector.bearScore.dd63,app/config/analyst.json,0.0148277409,float,0.0..0.3 step 0.1 (params.json selector.bear.dd63),linear,tunable,selector,both,,score weight
+analyst:selector.bearScore.windows.shortDays,app/config/analyst.json,15,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
+analyst:selector.bearScore.windows.longDays,app/config/analyst.json,83,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
+analyst:selector.bearScore.windows.hitDays,app/config/analyst.json,29,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
+analyst:selector.bearScore.windows.volDays,app/config/analyst.json,17,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
+analyst:selector.bearScore.windows.ddDays,app/config/analyst.json,32,int,proposed +-50% of the default,int,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H1: BEAR score windows; rows needed = longest + 7
+analyst:selector.bearScore.confirmThreshold,app/config/analyst.json,0.0392164252,float,proposed 0.0..0.05,linear,tunable,selector,both,tests/app/test_analyst_selector.py::ExposedSelectorNumbers,H4: BEAR tier confirmation
 analyst:ledger.runTime,app/config/analyst.json,"""16:30""",str,,,operational,ledger,live,,
 analyst:ledger.retryEveryMinutes,app/config/analyst.json,60,int,,,operational,ledger,live,,
 analyst:ledger.retryUntil,app/config/analyst.json,"""20:30""",str,,,operational,ledger,live,,
@@ -238,10 +238,10 @@ backtest:window.end,backtest/config/backtest.json,null,null,,,design,window,back
 backtest:window.holdoutYears,backtest/config/backtest.json,2,int,,,design,window,backtest,,
 backtest:broker.profile,backtest/config/backtest.json,"""angelone""",str,,,design,broker,backtest,,
 backtest:broker.chargesFrom,backtest/config/backtest.json,"""app/config/analyst.json""",str,,,design,broker,backtest,,
-backtest:capital.inr,backtest/config/backtest.json,100000,int,,,design,capital,backtest,,
-backtest:capital.composition.LargeCap,backtest/config/backtest.json,0.5,float,,,design,capital,backtest,,
-backtest:capital.composition.MidCap,backtest/config/backtest.json,0.3,float,,,design,capital,backtest,,
-backtest:capital.composition.SmallCap,backtest/config/backtest.json,0.2,float,,,design,capital,backtest,,
+backtest:capital.inr,backtest/config/backtest.json,450000,int,,,design,capital,backtest,,
+backtest:capital.composition.LargeCap,backtest/config/backtest.json,0.44,float,,,design,capital,backtest,,
+backtest:capital.composition.MidCap,backtest/config/backtest.json,0.32,float,,,design,capital,backtest,,
+backtest:capital.composition.SmallCap,backtest/config/backtest.json,0.24,float,,,design,capital,backtest,,
 backtest:fill.mode,backtest/config/backtest.json,"""open""",str,,,model-input,fill,backtest,,
 backtest:fill.realism.bands,backtest/config/backtest.json,false,bool,,,model-input,fill,backtest,,
 backtest:fill.realism.volumeCap,backtest/config/backtest.json,false,bool,,,model-input,fill,backtest,,

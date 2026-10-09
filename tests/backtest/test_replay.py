@@ -11,8 +11,10 @@ from app.risk import common as risk_common
 from backtest import dividends, pit, replay
 from backtest.targets import Targets
 from tests.backtest.test_targets import World
+from tests import fixtures
 
-RISK_CFG = risk_common.load_config("run")  # read before the tests change the working directory
+with fixtures.pinned():
+    RISK_CFG = risk_common.load_config("run")  # read before the tests change the working directory
 CAPITAL = 700000.0
 
 
@@ -24,7 +26,7 @@ class Replay(World):
         Path("config/analyst.json").write_text(json.dumps(self.cfg), encoding="utf-8")
         Path("config/indices.json").write_text(json.dumps({"indices": ["^NSEI"]}), encoding="utf-8")
         self.risk = copy.deepcopy(RISK_CFG)
-        self.risk["paths"].update(risk="data/risk", analystConfig="config/analyst.json", metadataConfig="config/config.json",
+        self.risk["paths"].update(risk="data/risk", analyst="data/analyst", analystConfig="config/analyst.json", metadataConfig="config/config.json",
                                   calendar="config/cal.json", indices="config/indices.json")
         risk_common.validate(self.risk, "run")
         self.targets = Targets(self.data, self.cfg)

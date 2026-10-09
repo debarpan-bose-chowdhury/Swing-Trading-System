@@ -22,7 +22,8 @@ def digest(text: str) -> str:
 
 def fingerprint(r: replay.Result) -> dict:
     sigs = [{k: v for k, v in s.items() if k != "generatedAt"} for s in r.signals]
-    return {"nav": digest(r.nav.to_csv(index=False)), "fills": digest(r.fills.to_csv(index=False)),
+    # lineterminator pinned: pandas ends lines with os.linesep, so on Windows the same data would hash differently from the digests recorded on Linux
+    return {"nav": digest(r.nav.to_csv(index=False, lineterminator="\n")), "fills": digest(r.fills.to_csv(index=False, lineterminator="\n")),
             "signals": digest(json.dumps(sigs, sort_keys=True, default=str)),
             "targets": digest(json.dumps(r.targets, sort_keys=True, default=str)),
             "rows": len(r.nav), "fillCount": len(r.fills)}

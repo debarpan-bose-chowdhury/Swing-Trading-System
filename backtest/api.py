@@ -9,7 +9,9 @@ grid-based params.Schema. It is a thin wrapper over replay.simulate, tax.lots / 
 calls backtest.run.evaluate and trials.Session.evaluate make (both now call it), so their results are the same by construction.
 """
 
+import copy
 import hashlib
+import random
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -17,10 +19,14 @@ from pathlib import Path
 import pandas as pd
 
 from app.risk import evaluator
-from backtest import config, params, replay, tax, world
+from backtest import config, params, replay, surv_proxy, tax, world
+from backtest.overfit import deflated_sharpe, pbo_cscv, sharpe  # noqa: F401  (re-exported for hpo/)
 from backtest.targets import TargetsCache
 from backtest.walkforward import HoldoutRead, Windows  # noqa: F401  (re-exported: the exception holdout_guard raises)
-from backtest.world import World
+from backtest.workers import init_worker, limit_threads  # noqa: F401  (re-exported: the process-pool settings every worker must apply)
+from backtest.world import World, config_hash, deep_merge  # noqa: F401  (re-exported for hpo/)
+
+perf = evaluator.perf  # metrics of a post-tax daily return series
 
 DEFAULT_TARGETS_CACHE = 4
 
@@ -54,6 +60,16 @@ def build_world(cfg_overrides: dict | None = None, *, targets_cache_size: int = 
     return w
 
 
+def base_configs(cfg_overrides: dict | None = None) -> tuple[dict, dict, dict]:
+    """(backtest cfg, risk, analyst) exactly as build_world would hold them, without loading any data (hpo/ decodes and hashes with these)."""
+    cfg = config.load()
+    if cfg_overrides:
+        cfg = world.deep_merge(cfg, cfg_overrides)
+        config.validate(cfg)
+    risk, analyst = world.app_configs(cfg)
+    return cfg, risk, analyst
+
+
 def targets_cache(w: World, size: int = DEFAULT_TARGETS_CACHE) -> TargetsCache:
     if "targets" not in w.cache:
         w.cache["targets"] = TargetsCache(w.data, size)
@@ -68,16 +84,17 @@ def data_hash(w: World) -> str:
 
 
 def evaluate_config(w: World, risk: dict, analyst: dict, start: str, end: str | None, *, haircut: float = 0.0, capital: float | None = None,
-                    progress=None) -> EvalResult:
+                    progress=None, monitor=None) -> EvalResult:
     """One judge run of the app configs `risk` and `analyst` over [start, end] on the world's data, taxed with the world's schedule.
 
     haircut: write-off share of a position whose ticker stopped trading (0 = at the last close, 1 = total loss).
     capital: starting rupees, default backtest.json capital.inr.
+    monitor: callable(nav_rows, fill_count) that may raise to stop the run early (see replay.simulate).
     """
     cfg = w.cfg
     result = replay.simulate(w.data, targets_cache(w).get(analyst), risk, start, end, cfg["capital"]["inr"] if capital is None else capital,
                              w.surveillance, carry_over_days=config.carry_over_days(cfg, risk), dividends=w.dividends, vanish_haircut=haircut,
-                             progress=progress, restart_after=config.restart_after(cfg))
+                             progress=progress, restart_after=config.restart_after(cfg), monitor=monitor)
     if result.nav.empty:
         raise ValueError(f"no simulated days between {start} and {end}")
     pieces = tax.lots(result.fills)
@@ -89,11 +106,23 @@ def evaluate_config(w: World, risk: dict, analyst: dict, start: str, end: str | 
     return EvalResult(r, result.nav, post, result.fills, taxes, metrics, hashes, result, pieces)
 
 
-def windows(w: World, schema: params.Schema | None = None) -> Windows:
-    """Holdout, tuning end, folds and purge for the world's index, from backtest.json and the parameter bounds."""
-    schema = schema or params.Schema.load(w.cfg["paths"]["params"], w.risk, w.analyst)
+def windows(w: World, schema: params.Schema | None = None, *, start: str | None = None, required_purge: int | None = None) -> Windows:
+    """Holdout, tuning end, folds and purge for the world's index, from backtest.json and the parameter bounds.
+
+    A caller that does not use the grid-based params.Schema (hpo/) passes `start` (first day every allowed point has a known regime)
+    and `required_purge` (longest allowed look-back, trading days) from its own space; both together replace the schema.
+    """
     dates = list(w.data.index.Date)
-    return Windows(dates, schema.common_start(dates), w.cfg["walkforward"], w.cfg["window"]["holdoutYears"], schema.required_purge())
+    if start is None or required_purge is None:
+        schema = schema or params.Schema.load(w.cfg["paths"]["params"], w.risk, w.analyst)
+        start, required_purge = schema.common_start(dates), schema.required_purge()
+    return Windows(dates, start, w.cfg["walkforward"], w.cfg["window"]["holdoutYears"], max(required_purge, config.MIN_PURGE_DAYS))
+
+
+def registry(folder: Path):
+    """The trial Registry (jsonl + per-trial returns parquet) of `folder`; imported lazily because trials.py imports this module."""
+    from backtest.trials import Registry
+    return Registry(folder)
 
 
 def holdout_guard(win: Windows, marker: Path, params_key: str) -> tuple[str, str]:
@@ -107,3 +136,30 @@ def point_key(point: dict) -> str:
 
 def trial_id(params_key: str, start: str, end: str, kind: str) -> str:
     return hashlib.sha256(f"{params_key}|{start}|{end}|{kind}".encode()).hexdigest()[:12]
+
+
+class _WithoutNames:
+    """A point-in-time membership with some tickers taken out (the robustness stress 'drop a share of the names')."""
+
+    def __init__(self, inner, drop: set):
+        self.inner, self.drop, self.names = inner, drop, inner.names
+
+    def at(self, asof: str) -> dict:
+        return {b: {s for s in ss if s not in self.drop} for b, ss in self.inner.at(asof).items()}
+
+    def hash_bytes(self) -> bytes:
+        return self.inner.hash_bytes() + ",".join(sorted(self.drop)).encode()
+
+
+def drop_names(w: World, share: float, seed: int) -> World:
+    """A copy of the world without a random `share` of its tickers (same data otherwise); the original is untouched."""
+    names = sorted(w.data.series)
+    drop = set(random.Random(seed).sample(names, round(share * len(names))))
+    data = copy.copy(w.data)
+    data.series = {k: v for k, v in w.data.series.items() if k not in drop}
+    data._static = {b: {s for s in ss if s not in drop} for b, ss in w.data._static.items()}
+    if w.data.membership is not None:
+        data.membership = _WithoutNames(w.data.membership, drop)
+    data._reindex()
+    from backtest.targets import Targets
+    return World(w.cfg, w.risk, w.analyst, data, Targets(data, w.analyst), w.dividends, surv_proxy.surveillance_for(data, w.cfg))

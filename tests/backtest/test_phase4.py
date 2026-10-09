@@ -24,9 +24,11 @@ from backtest import (
 )
 from tests.backtest.helpers import bars, repo_config, weekdays
 from tests.backtest.test_targets import World
+from tests import fixtures
 
 REPO = Path(__file__).resolve().parents[2]
-RISK_CFG = risk_common.load_config("run")
+with fixtures.pinned():
+    RISK_CFG = risk_common.load_config("run")
 SCHEDULE = json.loads((REPO / "backtest/config/backtest.json").read_text())["tax"]["schedule"]
 
 
@@ -152,7 +154,7 @@ class SingleRun(World):
 
     def setUp(self):
         super().setUp()  # changes into the temp working directory
-        shutil.copytree(REPO / "app/config", "app/config", dirs_exist_ok=True)
+        fixtures.copy_app_config()
         Path("app/config/nse_calendar.json").write_text(json.dumps({"holidays": ["2021-01-01"], "specialSessions": []}))  # weekdays only
         self.bt = repo_config()
         self.bt["overrides"]["risk"] = {"sizing": {"minNewOrderInr": 3000, "minAdjustmentInr": 1500}}
@@ -173,11 +175,18 @@ class SingleRun(World):
         for k in ("objectives", "preTax", "postTax", "trades", "tax"):
             self.assertEqual(rep[k], again[k])  # deterministic
 
-    def test_default_start_is_the_first_known_regime_and_one_lakh_does_not_trade_without_overrides(self):
+    def test_default_start_is_the_first_known_regime_and_a_small_account_does_not_trade_without_overrides(self):
         self.bt["overrides"]["risk"] = {}
+        self.bt["capital"]["inr"] = 100000  # the premise of this test is a small account: pinned, so it does not move with the shipped capital
         rep = json.loads(run.single(self.bt, None, self.days[300]).read_text())
         self.assertEqual(rep["trades"]["fills"], 0)  # minNewOrderInr 25000 is above every position a Rs 1 lakh account sizes
         self.assertGreaterEqual(rep["window"]["start"], self.days[200])
+
+    def test_the_shipped_capital_clears_the_live_sizing_gate(self):
+        """The shipped capital (backtest.json) must be large enough for the live risk.json minimum order: `hpo.cli capital` computes the bound."""
+        self.bt["overrides"]["risk"] = {}
+        rep = json.loads(run.single(self.bt, None, self.days[560]).read_text())
+        self.assertGreater(rep["trades"]["fills"], 0, "the shipped capital is too small for the live minNewOrderInr: raise backtest.json capital.inr (see `hpo.cli capital`)")
 
     def test_compare_is_refused_until_the_adjustment_is_validated(self):
         self.bt["universe"]["adjustValidated"] = False

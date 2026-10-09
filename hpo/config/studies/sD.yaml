@@ -1,0 +1,7 @@
+# Stage A, TPE, drawdown cap -30% -> -40% (abort -35% -> -45%) and exposure floor 25%: the live default (36% drawdown, 20% exposure at Rs 4.5 lakh) was infeasible, so sA-sC had no feasible anchor.
+name: sD
+stage: A
+sampler: tpe
+active: ["class:tunable"]
+trials: 400
+seed: 4

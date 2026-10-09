@@ -16,8 +16,10 @@ from app.market.common import COLS
 from app.risk import shadow
 from app.risk.common import Context, Portfolio
 from backtest import fills, pit
+from tests import fixtures
 
-COSTS = common.load_config()["costs"]  # read before the tests change the working directory
+with fixtures.pinned():
+    COSTS = common.load_config()["costs"]  # read before the tests change the working directory
 LOG = logging.getLogger("test.fills")
 BUCKETS = {"LargeCap": ["L1", "L2"], "MidCap": ["M1", "M2"], "SmallCap": ["S1", "S2", "S3"]}
 

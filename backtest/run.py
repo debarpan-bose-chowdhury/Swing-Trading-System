@@ -143,6 +143,9 @@ def _cfg(args) -> dict:
     cfg = config.load()
     if args.no_auto_restart:
         cfg["ladder"] = {"autoRestart": {"enabled": False, "afterSessions": 1}}
+    if args.capital is not None:
+        cfg["capital"] = {**cfg["capital"], "inr": args.capital}
+        config.validate(cfg)
     return cfg
 
 
@@ -155,6 +158,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="parameter from params.json, e.g. --set sizing.minNewOrderInr=3000 (repeatable); the live config at Rs 1 lakh cannot trade")
     parser.add_argument("--workers", type=int, help="--compare: parallel processes (default compute.workers in backtest.json, at most one per case; 1 = one after another)")
     parser.add_argument("--no-auto-restart", action="store_true", help="keep the live ladder: a flat-lock is never restarted (default: ladder.autoRestart in backtest.json)")
+    parser.add_argument("--capital", type=float, metavar="INR", help="starting capital in rupees, 100000 (1 lakh) or more (default: capital.inr in backtest.json)")
     parser.add_argument("--start", help="first simulated day (default: window.start, else the first known regime)")
     parser.add_argument("--end", help="last simulated day (default: window.end, else the end of the data)")
     args = parser.parse_args(argv)

@@ -1,0 +1,102 @@
+{
+  "placeholders": false,
+  "broker": {
+    "name": "AngelOne",
+    "timeoutSeconds": 15,
+    "minCallGapSeconds": 1.0,
+    "maxRetries": 3,
+    "backoffSeconds": [2, 4, 8],
+    "loginAttempts": 3,
+    "loginRetryGapSeconds": 60,
+    "clientLocalIp": "127.0.0.1",
+    "clientPublicIp": "127.0.0.1",
+    "clientMacAddress": "00:00:00:00:00:00"
+  },
+  "capital": { "floatingCapitalInr": 450000, "ignoreSymbols": [] },
+  "limits": { "maxPositionDrawdownPct": 0.17, "maxPortfolioDrawdownPct": 0.5 },
+  "composition": { "LargeCap": 0.5, "MidCap": 0.3, "SmallCap": 0.2 },
+  "rebalance": { "schedule": "weekly", "execution": "monday_open" },
+  "regime": { "index": "^NSEI", "persistenceWeeks": 4, "minRows": 210, "smaFast": 50, "smaSlow": 200, "momentumDays": 63, "momentumThreshold": 0.0, "unknownExtra": 9 },
+  "strategies": {
+    "BULL": {
+      "LargeCap": { "top_n": 2, "lookback": 126, "stock_trend_ma": 150 },
+      "MidCap": { "top_n": 2, "lookback": 126, "stock_trend_ma": 150 },
+      "SmallCap": { "top_n": 2, "lookback": 126, "stock_trend_ma": 150 }
+    },
+    "TREND": {
+      "LargeCap": { "top_n": 4, "lookback": 168, "stock_trend_ma": 150 },
+      "MidCap": { "top_n": 4, "lookback": 168, "stock_trend_ma": 150 },
+      "SmallCap": { "top_n": 4, "lookback": 168, "stock_trend_ma": 150 }
+    },
+    "WEAK": {
+      "LargeCap": { "top_n": 6, "lookback": 84, "stock_trend_ma": 150 },
+      "MidCap": { "top_n": 6, "lookback": 84, "stock_trend_ma": 150 },
+      "SmallCap": { "top_n": 6, "lookback": 84, "stock_trend_ma": 150 }
+    },
+    "BEAR": {
+      "LargeCap": { "top_n": 8, "lookback": 63, "stock_trend_ma": 150 },
+      "MidCap": { "top_n": 8, "lookback": 63, "stock_trend_ma": 150 },
+      "SmallCap": { "top_n": 8, "lookback": 63, "stock_trend_ma": 150 }
+    }
+  },
+  "selector": {
+    "maxStaleTradingDays": 0,
+    "maxBucketFileAgeDays": 7,
+    "maxMissingShare": 0.10,
+    "momentumSkipDays": 0,
+    "minMomentum": 0.0,
+    "trendBuffer": 0.0,
+    "liquidity": { "windowDays": 20, "minAdvCr": 10, "statistic": "median" },
+    "bearScore": {
+      "mom20": 0.40, "mom63": 0.35, "hit20": 0.20, "vol20": -0.35, "dd63": 0.10,
+      "windows": { "shortDays": 20, "longDays": 63, "hitDays": 20, "volDays": 20, "ddDays": 63 },
+      "confirmThreshold": 0.0
+    }
+  },
+  "ledger": {
+    "runTime": "16:30",
+    "retryEveryMinutes": 60,
+    "retryUntil": "20:30",
+    "snapshotRetentionDays": 90,
+    "backupRetentionDays": 30,
+    "corpActionCostTolerance": 0.01,
+    "observedQtyFields": ["quantity"]
+  },
+  "signals": {
+    "runTime": "21:30",
+    "retryEveryMinutes": 60,
+    "retryUntil": "Sun 22:00",
+    "maxHoldingsSnapshotAgeDays": 3,
+    "targetsRetentionWeeks": 104
+  },
+  "costs": {
+    "asOf": "2026-09-30",
+    "brokerage": { "flatInr": 20, "pct": 0.001, "minInr": 5 },
+    "sttPct": 0.001,
+    "nseTxnPct": 0.000030699,
+    "ipftPct": 0.000000001,
+    "sebiPct": 0.000001,
+    "stampBuyPct": 0.00015,
+    "gstPct": 0.18,
+    "dpSellInr": 20,
+    "dpGstPct": 0.18,
+    "slippageBpsPerSide": { "LargeCap": 10, "MidCap": 25, "SmallCap": 50 },
+    "minTradeNotionalInr": 20000
+  },
+  "paths": {
+    "analyst": "app/data/analyst",
+    "market": "app/data/market",
+    "upstreamStorage": "app/data/storage",
+    "metadataConfig": "app/config/config.json",
+    "calendar": "app/config/nse_calendar.json",
+    "seed": "app/config/seed_positions.csv",
+    "logs": "app/data/logs"
+  },
+  "lock": { "staleAfterHours": 6 },
+  "mail": {
+    "smtpHost": "<set at deployment>",
+    "smtpPort": 587,
+    "sender": "<set at deployment>",
+    "recipients": ["<set at deployment>"]
+  }
+}

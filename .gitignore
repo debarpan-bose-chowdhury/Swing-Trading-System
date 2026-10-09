@@ -13,3 +13,7 @@ app/data/
 
 # backtest
 backtest/data/
+
+# hpo
+hpo/data/
+hpo/.venv/

@@ -22,8 +22,10 @@ from app.market.common import COLS, IST
 from app.market.store import Store
 from backtest import pit
 from backtest.targets import PICK_KEYS, Targets
+from tests import fixtures
 
-APP_CFG = common.load_config()  # read before the tests change the working directory
+with fixtures.pinned():
+    APP_CFG = common.load_config()  # read before the tests change the working directory
 META = Path("app/config/config.json").read_text(encoding="utf-8")
 LOG = logging.getLogger("test.targets")
 NOW = datetime(2026, 9, 25, 21, 30, tzinfo=IST)

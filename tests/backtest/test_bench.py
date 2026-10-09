@@ -4,6 +4,7 @@ import pandas as pd
 
 from backtest import bench, walkforward, workers
 from tests.backtest.test_params_walkforward import BT, schema
+from tests import fixtures
 
 
 class BenchTests(unittest.TestCase):
@@ -26,8 +27,8 @@ class BenchTests(unittest.TestCase):
             try:
                 from pathlib import Path
                 import shutil
-                shutil.copytree(Path(__file__).parents[2] / "backtest/config", "backtest/config")
-                shutil.copytree(Path(__file__).parents[2] / "app/config", "app/config")
+                fixtures.copy_backtest_config()
+                fixtures.copy_app_config()
                 self.assertEqual(bench.main([]), 3)
             finally:
                 os.chdir(previous)
